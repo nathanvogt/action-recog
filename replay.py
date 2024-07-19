@@ -6,7 +6,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import json
 
 
-path = os.path.join("train", "s03", "joints3d_25", "deadlift.json")
+path = os.path.join("train", "s03", "joints3d_25", "squat.json")
 with open(path) as f:
     data = json.load(f)
 poses = np.array(data["joints3d_25"])

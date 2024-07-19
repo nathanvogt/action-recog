@@ -10,33 +10,31 @@ from data import (
     LEFT_ARM_NO_HAND,
     RIGHT_ARM_NO_HAND,
     BACK,
+    KP_TO_NAME,
 )
 
 
 def process_keypoint(args):
     kp, curve, c = args
     start = c + 1
-    sls_points = create_sls_with_memo()
+    sls_points = create_sls_with_memo(m=3)
     mem_indices = np.arange(0, start)
     points = []
     for i in range(start + 1, len(curve)):
         window = curve[:i]
         mem_indices = np.append(mem_indices, i - 1)
         points_, mem_indices_, _ = sls_points(window, mem_indices, c)
-        # print(f"{mem_indices_=}")
         points = points_
         mem_indices = mem_indices_
     return kp, points
 
 
 def main():
-    path = os.path.join("train", "s03", "joints3d_25", "deadlift.json")
+    path = os.path.join("train", "s03", "joints3d_25", "squat.json")
     with open(path) as f:
         data = json.load(f)
     poses = np.array(data["joints3d_25"])
-    poses = poses[240:450]
-
-    print(poses.shape)
+    poses = poses[380:528]
 
     keypoints = (
         LEFT_LEG_NO_FEET
@@ -47,9 +45,7 @@ def main():
     )
     curves = np.swapaxes(poses, 0, 1)
 
-    print(curves.shape)
-
-    c = 8
+    c = 10
 
     args = [(kp, curves[kp], c) for kp in keypoints]
 
@@ -63,8 +59,6 @@ def main():
     for kp, result in results:
         lss_curves[kp] = result
 
-    print(lss_curves.shape)
-
     fig = plt.figure(figsize=(12, 8))
     ax = fig.add_subplot(111, projection="3d")
 
@@ -72,7 +66,7 @@ def main():
         x = lss_curves[kp, :, 0]
         y = lss_curves[kp, :, 1]
         z = lss_curves[kp, :, 2]
-        ax.plot(x, y, z, label=f"Keypoint {kp}")
+        ax.plot(x, y, z, label=f"{KP_TO_NAME[kp]}")
 
     ax.set_xlabel("X")
     ax.set_ylabel("Y")

@@ -3,7 +3,7 @@ import json
 import numpy as np
 
 
-KP_TO_IDX = {
+KP_TO_NAME = {
     0: "center_hip",
     1: "right_hip",
     2: "right_knee",

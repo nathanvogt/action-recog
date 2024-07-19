@@ -1,6 +1,8 @@
 import numpy as np
 from typing import Callable, Tuple
 
+SVM_INCLUDED_KPS = np.arange(25)
+
 
 def segmented_least_squares_fixed_segments(
     points: np.ndarray, num_segments: int
@@ -273,7 +275,7 @@ def create_sls_with_memo(
 
 
 def create_sls_each_curve_with_memo(
-    m: int = DEFAULT_M, c: int = DEFAULT_C
+    m: int = DEFAULT_M, c: int = DEFAULT_C, included_kps: list[int] = SVM_INCLUDED_KPS
 ) -> Callable[[np.ndarray, np.ndarray, int], np.ndarray]:
     compute_sls = create_sls_with_memo(m)
     c_ = c
@@ -285,7 +287,7 @@ def create_sls_each_curve_with_memo(
             [
                 (
                     compute_sls(curve, curve_mem_indices[kp], c)
-                    if kp in SVM_INCLUDED_KPS
+                    if kp in included_kps
                     else (np.array([]), np.array([], dtype=int), 0)
                 )
                 for kp, curve in enumerate(point_windows)
@@ -293,6 +295,3 @@ def create_sls_each_curve_with_memo(
         )
 
     return sls_each_curve
-
-
-SVM_INCLUDED_KPS = []  # this will be updated in the future
