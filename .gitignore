@@ -1,6 +1,13 @@
-nturgb+d_skeletons/
-nturgb+d_skeletons/**
+skeletons/
+skeletons/**
 .vscode/
 .vscode/**
 .venv/
 .venv/**
+__pycache__/
+__pycache__/**
+
+train/**
+fit3d**
+.DS_Store
+**/.DS_Store/**
