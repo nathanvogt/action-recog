@@ -4,46 +4,50 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from mpl_toolkits.mplot3d import Axes3D
 import json
-
+from sls_arcive import create_sls_with_memo
+from data import (
+    LEFT_LEG_NO_FEET,
+    RIGHT_LEG_NO_FEET,
+    LEFT_ARM_NO_HAND,
+    RIGHT_ARM_NO_HAND,
+    BACK,
+    KP_TO_NAME,
+)
 
 path = os.path.join("train", "s03", "joints3d_25", "squat.json")
 with open(path) as f:
     data = json.load(f)
 poses = np.array(data["joints3d_25"])
 
-
 connections = [
     (0, 1),
     (1, 2),
-    (2, 3),  # right ankle
+    (2, 3),  # right leg
     (0, 4),
     (4, 5),
-    (5, 6),  # left ankle
+    (5, 6),  # left leg
     (0, 7),
     (7, 8),
     (8, 9),
-    (9, 10),  # tip of head
+    (9, 10),  # spine and head
     (8, 11),
     (11, 12),
-    (12, 13),  # right wrist
+    (12, 13),  # right arm
     (8, 14),
     (14, 15),
-    (15, 16),  # left wrist
-    (3, 17),
-    (17, 18),
-    (6, 19),
-    (19, 20),
-    (13, 21),
-    (13, 22),
-    (16, 23),
-    (16, 24),
+    (15, 16),  # left arm
 ]
 
-fig = plt.figure()
+keypoints = (
+    LEFT_LEG_NO_FEET + RIGHT_LEG_NO_FEET + LEFT_ARM_NO_HAND + RIGHT_ARM_NO_HAND + BACK
+)
+
+fig = plt.figure(figsize=(12, 8))
 ax = fig.add_subplot(111, projection="3d")
 
 lines = [ax.plot([], [], [])[0] for _ in connections]
 scatter = ax.scatter([], [], [])
+lss_lines = [ax.plot([], [], [], linestyle="--", alpha=0.5)[0] for _ in keypoints]
 
 max_range = (
     np.array(
@@ -71,9 +75,32 @@ paused = False
 current_frame = 0
 
 
+curves = np.swapaxes(poses, 0, 1)
+
+# Initialize LSS curves
+c = 8
+sls_points = [create_sls_with_memo(m=3) for _ in keypoints]
+lss_curves = [[] for _ in keypoints]
+mem_indices = [np.arange(c, dtype=int) for _ in keypoints]
+
+
+def update_lss_curves(frame):
+    global lss_curves, mem_indices
+    for i, kp in enumerate(keypoints):
+        curve = curves[kp]
+        if frame < c:
+            lss_curves[i] = curve[0:1]
+        else:
+            mem_indices[i] = np.append(mem_indices[i], frame)
+            points_, mem_indices[i], _ = sls_points[i](curve, mem_indices[i], c)
+            lss_curves[i] = points_
+
+
 def update(frame):
     global current_frame
     current_frame = frame
+
+    # Update pose lines and scatter
     for line, connection in zip(lines, connections):
         start, end = connection
         line.set_data(
@@ -84,9 +111,17 @@ def update(frame):
 
     scatter._offsets3d = (poses[frame, :, 0], poses[frame, :, 1], poses[frame, :, 2])
 
+    # Update LSS curves
+    update_lss_curves(frame)
+    for i, lss_line in enumerate(lss_lines):
+        lss_curve = lss_curves[i]
+        if len(lss_curve) > 0:
+            lss_line.set_data(lss_curve[:, 0], lss_curve[:, 1])
+            lss_line.set_3d_properties(lss_curve[:, 2])
+
     ax.set_title(f"Frame {frame}")
 
-    return lines + [scatter]
+    return lines + [scatter] + lss_lines
 
 
 def on_key(event):
