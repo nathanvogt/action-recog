@@ -11,7 +11,6 @@ from data import (
     LEFT_ARM_NO_HAND,
     RIGHT_ARM_NO_HAND,
     BACK,
-    KP_TO_NAME,
 )
 
 path = os.path.join("train", "s03", "joints3d_25", "squat.json")
@@ -59,6 +58,7 @@ max_range = (
     ).max()
     / 2.0
 )
+
 mid_x = (poses[:, :, 0].max() + poses[:, :, 0].min()) * 0.5
 mid_y = (poses[:, :, 1].max() + poses[:, :, 1].min()) * 0.5
 mid_z = (poses[:, :, 2].max() + poses[:, :, 2].min()) * 0.5
@@ -74,11 +74,10 @@ ax.set_zlabel("Z")
 paused = False
 current_frame = 0
 
-
 curves = np.swapaxes(poses, 0, 1)
 
 # Initialize LSS curves
-c = 8
+c = 4
 sls_points = [create_sls_with_memo(m=3) for _ in keypoints]
 lss_curves = [[] for _ in keypoints]
 mem_indices = [np.arange(c, dtype=int) for _ in keypoints]
