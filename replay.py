@@ -16,7 +16,9 @@ from data import (
 path = os.path.join("train", "s03", "joints3d_25", "squat.json")
 with open(path) as f:
     data = json.load(f)
-poses = np.array(data["joints3d_25"])
+poses = np.array(data["joints3d_25"])[80::4, :, :]
+
+keypoints = BACK + LEFT_ARM_NO_HAND + RIGHT_ARM_NO_HAND
 
 connections = [
     (0, 1),
@@ -36,10 +38,6 @@ connections = [
     (14, 15),
     (15, 16),  # left arm
 ]
-
-keypoints = (
-    LEFT_LEG_NO_FEET + RIGHT_LEG_NO_FEET + LEFT_ARM_NO_HAND + RIGHT_ARM_NO_HAND + BACK
-)
 
 fig = plt.figure(figsize=(12, 8))
 ax = fig.add_subplot(111, projection="3d")
@@ -77,10 +75,21 @@ current_frame = 0
 curves = np.swapaxes(poses, 0, 1)
 
 # Initialize LSS curves
-c = 4
-sls_points = [create_sls_with_memo(m=3) for _ in keypoints]
+c = 6
+m = 3
+sls_points = [create_sls_with_memo(m) for _ in keypoints]
 lss_curves = [[] for _ in keypoints]
 mem_indices = [np.arange(c, dtype=int) for _ in keypoints]
+
+
+def clear_lss_curves(frame):
+    global sls_points, lss_curves, mem_indices
+    sls_points = [create_sls_with_memo(m) for _ in keypoints]
+    lss_curves = [[] for _ in keypoints]
+    mem_indices = [np.arange(c, dtype=int) + (frame - c) for _ in keypoints]
+    for lss_line in lss_lines:
+        lss_line.set_data([], [])
+        lss_line.set_3d_properties([])
 
 
 def update_lss_curves(frame):
@@ -124,27 +133,28 @@ def update(frame):
 
 
 def on_key(event):
-    global paused, current_frame
+    global paused
     if event.key == " ":
         paused = not paused
         if paused:
             anim.event_source.stop()
         else:
             anim.event_source.start()
-    elif event.key == "right" and paused:
-        current_frame = (current_frame + 1) % poses.shape[0]
-        update(current_frame)
-        fig.canvas.draw()
-    elif event.key == "left" and paused:
-        current_frame = (current_frame - 1) % poses.shape[0]
-        update(current_frame)
-        fig.canvas.draw()
+    elif event.key == "c":
+        clear_lss_curves(current_frame)
+        fig.canvas.draw_idle()
 
 
 fig.canvas.mpl_connect("key_press_event", on_key)
 
+frame_rate = 15
 anim = FuncAnimation(
-    fig, update, frames=poses.shape[0], interval=33.33, blit=False, repeat=True
+    fig,
+    update,
+    frames=poses.shape[0],
+    interval=1000 / frame_rate,
+    blit=False,
+    repeat=True,
 )
 
 plt.show()

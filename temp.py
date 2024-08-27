@@ -31,7 +31,7 @@ def main():
     with open(path) as f:
         data = json.load(f)
     poses = np.array(data["joints3d_25"])
-    poses = poses[380:528]
+    poses = poses
 
     # Use only a single point on the body (e.g., the first point of BACK)
     keypoint = 0  # You can change this to any other keypoint index if desired
