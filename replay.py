@@ -75,7 +75,7 @@ current_frame = 0
 curves = np.swapaxes(poses, 0, 1)
 
 # Initialize LSS curves
-c = 6
+c = 8
 m = 3
 sls_points = [create_sls_with_memo(m) for _ in keypoints]
 lss_curves = [[] for _ in keypoints]

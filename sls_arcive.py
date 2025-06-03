@@ -1,5 +1,12 @@
 import numpy as np
 from typing import Callable, Tuple
+from data import (
+    LEFT_LEG_NO_FEET,
+    RIGHT_LEG_NO_FEET,
+    LEFT_ARM_NO_HAND,
+    RIGHT_ARM_NO_HAND,
+    BACK,
+)
 
 SVM_INCLUDED_KPS = np.arange(25)
 
@@ -295,3 +302,28 @@ def create_sls_each_curve_with_memo(
         )
 
     return sls_each_curve
+
+
+def process_poses(poses, c, m, keypoints=None):
+    if keypoints is None:
+        keypoints = (
+            LEFT_LEG_NO_FEET
+            + RIGHT_LEG_NO_FEET
+            + LEFT_ARM_NO_HAND
+            + RIGHT_ARM_NO_HAND
+            + BACK
+        )
+    sls_points = [create_sls_with_memo(m) for _ in keypoints]
+    lss_curves = [[] for _ in keypoints]
+    mem_indices = [np.arange(c, dtype=int) for _ in keypoints]
+    curves = np.swapaxes(poses, 0, 1)
+    for frame in range(poses.shape[0]):
+        for i, kp in enumerate(keypoints):
+            curve = curves[kp]
+            if frame < c:
+                lss_curves[i] = curve[0:1]
+            else:
+                mem_indices[i] = np.append(mem_indices[i], frame)
+                points_, mem_indices[i], _ = sls_points[i](curve, mem_indices[i], c)
+                lss_curves[i] = points_
+    return lss_curves
