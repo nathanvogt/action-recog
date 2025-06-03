@@ -1,9 +1,4 @@
-import os
-import json
-import numpy as np
-
-
-KP_TO_NAME = {
+export const KP_TO_NAME: Record<number, string> = {
     0: "center_hip",
     1: "right_hip",
     2: "right_knee",
@@ -29,14 +24,14 @@ KP_TO_NAME = {
     22: "right_hand_2",
     23: "left_hand_1",
     24: "left_hand_2",
-}
+};
 
-LEFT_LEG_NO_FEET = [4, 5, 6]
-RIGHT_LEG_NO_FEET = [1, 2, 3]
-LEFT_ARM_NO_HAND = [14, 15, 16]
-RIGHT_ARM_NO_HAND = [11, 12, 13]
-LEFT_HAND = [22, 24]
-RIGHT_HAND = [21, 23]
-LEFT_FOOT = [19, 20]
-RIGHT_FOOT = [17, 18]
-BACK = [0, 7]
+export const LEFT_LEG_NO_FEET = [4,5,6];
+export const RIGHT_LEG_NO_FEET = [1,2,3];
+export const LEFT_ARM_NO_HAND = [14,15,16];
+export const RIGHT_ARM_NO_HAND = [11,12,13];
+export const LEFT_HAND = [22,24];
+export const RIGHT_HAND = [21,23];
+export const LEFT_FOOT = [19,20];
+export const RIGHT_FOOT = [17,18];
+export const BACK = [0,7];
