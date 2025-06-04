@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "build": "vite build",
-    "start": "ts-node src/testTrainDataset.ts"
+    "test-train-dataset": "ts-node src/scripts/testTrainDataset.ts",
+    "idk": "ts-node src/scripts/testDataset.ts"
   },
   "keywords": [],
   "author": "",

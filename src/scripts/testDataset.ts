@@ -1,14 +1,14 @@
-import { TrainDataset } from './trainDataset';
+import { TrainDataset } from "../libs/trainDataset";
 
 function main() {
   const dataset = new TrainDataset();
-  console.log('Dataset root:', dataset.root);
+  console.log("Dataset root:", dataset.root);
 
   const subjects = dataset.listSubjects();
-  console.log('Subjects:', subjects);
+  console.log("Subjects:", subjects);
 
   const allExercises = dataset.listAllExercises();
-  console.log('All exercises:', allExercises);
+  console.log("All exercises:", allExercises);
 
   if (subjects.length) {
     const subj = subjects[0];
@@ -19,7 +19,7 @@ function main() {
       const ex = exercises[0];
       if (dataset.subjectHasExercise(subj, ex)) {
         const instance = dataset.loadInstance(subj, ex);
-        console.log('Loaded instance:', {
+        console.log("Loaded instance:", {
           subject: instance.subject,
           exercise: instance.exercise,
           posesShape: [instance.poses.length, instance.poses[0]?.length ?? 0],

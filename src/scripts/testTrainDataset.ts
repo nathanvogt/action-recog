@@ -1,11 +1,11 @@
 // Test script to demonstrate TrainDataset functionality
-import fs from 'fs';
-import { TrainDataset } from './trainDataset';
+import fs from "fs";
+import { TrainDataset } from "../libs/trainDataset";
 
 function main() {
-  console.log('='.repeat(60));
-  console.log('TrainDataset Functionality Test');
-  console.log('='.repeat(60));
+  console.log("=".repeat(60));
+  console.log("TrainDataset Functionality Test");
+  console.log("=".repeat(60));
 
   const dataset = new TrainDataset();
   console.log(`Dataset root directory: ${dataset.root}`);
@@ -13,42 +13,44 @@ function main() {
   console.log();
 
   // 1. List subjects
-  console.log('1. Available Subjects:');
-  console.log('-'.repeat(30));
+  console.log("1. Available Subjects:");
+  console.log("-".repeat(30));
   const subjects = dataset.listSubjects();
   if (subjects.length) {
-    subjects.forEach((subject, idx) => {
+    subjects.forEach((subject: string, idx: number) => {
       console.log(`   ${idx + 1}. ${subject}`);
     });
   } else {
-    console.log('   No subjects found (dataset directory may not exist)');
+    console.log("   No subjects found (dataset directory may not exist)");
   }
   console.log(`   Total subjects: ${subjects.length}`);
   console.log();
 
   // 2. List all exercises
-  console.log('2. All Available Exercises:');
-  console.log('-'.repeat(30));
+  console.log("2. All Available Exercises:");
+  console.log("-".repeat(30));
   const allExercises = dataset.listAllExercises();
   if (allExercises.length) {
-    allExercises.forEach((ex, idx) => {
+    allExercises.forEach((ex: string, idx: number) => {
       console.log(`   ${idx + 1}. ${ex}`);
     });
   } else {
-    console.log('   No exercises found');
+    console.log("   No exercises found");
   }
   console.log(`   Total exercises: ${allExercises.length}`);
   console.log();
 
   // 3. Exercises by subject
   if (subjects.length) {
-    console.log('3. Exercises by Subject:');
-    console.log('-'.repeat(30));
+    console.log("3. Exercises by Subject:");
+    console.log("-".repeat(30));
     for (const subject of subjects) {
       const exercises = dataset.listExercisesForSubject(subject);
       console.log(`   ${subject}: ${exercises.length} exercises`);
       if (exercises.length) {
-        exercises.slice(0, 3).forEach((ex) => console.log(`      - ${ex}`));
+        exercises
+          .slice(0, 3)
+          .forEach((ex: string) => console.log(`      - ${ex}`));
         if (exercises.length > 3) {
           console.log(`      ... and ${exercises.length - 3} more`);
         }
@@ -61,7 +63,7 @@ function main() {
   if (allExercises.length) {
     const testExercise = allExercises[0];
     console.log(`4. Instances of '${testExercise}':`);
-    console.log('-'.repeat(30));
+    console.log("-".repeat(30));
     const instances = dataset.listInstances(testExercise);
     if (instances.length) {
       for (const [subject, p] of instances) {
@@ -85,21 +87,44 @@ function main() {
     const testExercise = allExercises[0];
     if (dataset.subjectHasExercise(testSubject, testExercise)) {
       console.log(`5. Loading Instance: ${testSubject} - ${testExercise}`);
-      console.log('-'.repeat(30));
+      console.log("-".repeat(30));
       try {
         const instance = dataset.loadInstance(testSubject, testExercise);
         console.log(`   Subject: ${instance.subject}`);
         console.log(`   Exercise: ${instance.exercise}`);
         console.log(
-          `   Poses shape: [${instance.poses.length}, ${instance.poses[0]?.length ?? 0}]`
+          `   Poses shape: [${instance.poses.length}, ${
+            instance.poses[0]?.length ?? 0
+          }]`
         );
         console.log(`   Number of reps: ${instance.num_reps}`);
         console.log(`   Has timings: ${instance.timings !== null}`);
+
+        // Print timing details if available
+        if (instance.timings !== null) {
+          console.log(`   Rep timings (frame indices):`);
+          instance.timings.forEach((timing: any, idx: number) => {
+            if (Array.isArray(timing) && timing.length === 2) {
+              console.log(
+                `      Rep ${idx + 1}: frames ${timing[0]} - ${timing[1]} (${
+                  timing[1] - timing[0] + 1
+                } frames)`
+              );
+            } else if (typeof timing === "number") {
+              console.log(`      Rep ${idx + 1}: frame ${timing}`);
+            } else {
+              console.log(`      Rep ${idx + 1}: ${JSON.stringify(timing)}`);
+            }
+          });
+        }
+
         console.log(`   Additional info keys: ${Object.keys(instance.info)}`);
 
         const poses = dataset.getPoseArray(testSubject, testExercise);
         console.log(
-          `   Pose array shape (direct): [${poses.length}, ${poses[0]?.length ?? 0}]`
+          `   Pose array shape (direct): [${poses.length}, ${
+            poses[0]?.length ?? 0
+          }]`
         );
       } catch (err) {
         console.log(`   Error loading instance: ${err}`);
@@ -108,9 +133,9 @@ function main() {
     }
   }
 
-  console.log('='.repeat(60));
-  console.log('Test completed!');
-  console.log('='.repeat(60));
+  console.log("=".repeat(60));
+  console.log("Test completed!");
+  console.log("=".repeat(60));
 }
 
 main();
