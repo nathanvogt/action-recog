@@ -1,13 +1,13 @@
 // Test script to demonstrate TrainDataset functionality
 import fs from "fs";
-import { TrainDataset } from "../libs/trainDataset";
+import { TrainDatasetLocal } from "../libs/trainDataset/trainDataset";
 
 function main() {
   console.log("=".repeat(60));
   console.log("TrainDataset Functionality Test");
   console.log("=".repeat(60));
 
-  const dataset = new TrainDataset();
+  const dataset = new TrainDatasetLocal();
   console.log(`Dataset root directory: ${dataset.root}`);
   console.log(`Root directory exists: ${fs.existsSync(dataset.root)}`);
   console.log();

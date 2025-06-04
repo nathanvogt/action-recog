@@ -6,15 +6,24 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test-train-dataset": "ts-node src/scripts/testTrainDataset.ts",
-    "idk": "ts-node src/scripts/testDataset.ts"
+    "test-train-dataset": "node --loader ts-node/esm src/scripts/testTrainDataset.ts",
+    "idk": "node --loader ts-node/esm src/scripts/testDataset.ts",
+    "server": "node --loader ts-node/esm src/server/trainDatasetServer.ts",
+    "start-server": "node --loader ts-node/esm src/scripts/startServer.ts",
+    "test-remote-dataset": "node --loader ts-node/esm src/scripts/testRemoteDataset.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  },
   "devDependencies": {
     "@types/node": "^22.15.29",
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.4",
     "tailwindcss": "^4.1.8",
@@ -27,6 +36,8 @@
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "@vitejs/plugin-react": "^4.5.1",
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   }

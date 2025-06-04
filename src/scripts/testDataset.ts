@@ -1,7 +1,7 @@
-import { TrainDataset } from "../libs/trainDataset";
+import { TrainDatasetLocal } from "../libs/trainDataset/trainDataset";
 
 function main() {
-  const dataset = new TrainDataset();
+  const dataset = new TrainDatasetLocal();
   console.log("Dataset root:", dataset.root);
 
   const subjects = dataset.listSubjects();
