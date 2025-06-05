@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { TrainDatasetRemote } from "../../libs/trainDataset/trainDataset.js";
 
 const ExerciseInstanceMenu: React.FC = () => {
@@ -7,9 +7,11 @@ const ExerciseInstanceMenu: React.FC = () => {
     subject_id: string;
     exercise_name: string;
   }>();
+  const navigate = useNavigate();
 
   const [cameraIds, setCameraIds] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
 
   // Video-related state
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -26,6 +28,10 @@ const ExerciseInstanceMenu: React.FC = () => {
         setError(null);
         const ids = await remote.listCameraIds(subject_id);
         setCameraIds(ids);
+        // Auto-select the first camera if available
+        if (ids.length > 0) {
+          setSelectedCameraId(ids[0]);
+        }
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to fetch camera IDs"
@@ -37,19 +43,22 @@ const ExerciseInstanceMenu: React.FC = () => {
   }, [subject_id]);
 
   useEffect(() => {
-    // Fetch video for the first camera ID
+    // Fetch video for the selected camera ID
     const fetchVideo = async () => {
-      if (!subject_id || !exercise_name || !cameraIds || cameraIds.length === 0)
-        return;
-
-      const firstCameraId = cameraIds[0];
+      if (!subject_id || !exercise_name || !selectedCameraId) return;
 
       try {
         setVideoError(null);
+        // Clear previous video URL
+        if (videoUrl) {
+          URL.revokeObjectURL(videoUrl);
+          setVideoUrl(null);
+        }
+
         const blob = await remote.getVideoBlob(
           subject_id,
           exercise_name,
-          firstCameraId
+          selectedCameraId
         );
 
         // Create object URL for video element
@@ -63,7 +72,7 @@ const ExerciseInstanceMenu: React.FC = () => {
     };
 
     fetchVideo();
-  }, [subject_id, exercise_name, cameraIds]);
+  }, [subject_id, exercise_name, selectedCameraId]);
 
   // Handle case where params might be undefined
   if (!subject_id || !exercise_name) {
@@ -79,7 +88,15 @@ const ExerciseInstanceMenu: React.FC = () => {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Exercise Instance</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">Exercise Instance</h1>
+        <button
+          onClick={() => navigate("/")}
+          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors font-medium"
+        >
+          ← Back to Main Menu
+        </button>
+      </div>
       <div className="space-y-4">
         <div className="space-y-2">
           <p>
@@ -98,17 +115,19 @@ const ExerciseInstanceMenu: React.FC = () => {
             <p className="text-red-600">Error: {error}</p>
           ) : cameraIds.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              {cameraIds.map((cameraId, index) => (
-                <div
+              {cameraIds.map((cameraId) => (
+                <button
                   key={cameraId}
-                  className={`px-3 py-2 rounded-md text-sm font-medium ${
-                    index === 0
+                  onClick={() => setSelectedCameraId(cameraId)}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors hover:opacity-80 ${
+                    cameraId === selectedCameraId
                       ? "bg-green-100 text-green-800 border-2 border-green-300"
-                      : "bg-blue-100 text-blue-800"
+                      : "bg-blue-100 text-blue-800 hover:bg-blue-200"
                   }`}
                 >
-                  {cameraId} {index === 0 && "(Currently shown)"}
-                </div>
+                  {cameraId}{" "}
+                  {cameraId === selectedCameraId && "(Currently shown)"}
+                </button>
               ))}
             </div>
           ) : (
@@ -143,13 +162,13 @@ const ExerciseInstanceMenu: React.FC = () => {
             <div className="space-y-2">
               <p className="text-sm text-gray-600">
                 Showing video from camera:{" "}
-                <span className="font-medium">{cameraIds[0]}</span>
+                <span className="font-medium">{selectedCameraId}</span>
               </p>
               <video
                 controls
                 className="rounded-lg shadow-lg"
                 preload="metadata"
-                style={{ height: "300px", width: "auto" }}
+                style={{ height: "500px", width: "auto" }}
               >
                 <source src={videoUrl} type="video/mp4" />
                 Your browser doesn't support video playback.
