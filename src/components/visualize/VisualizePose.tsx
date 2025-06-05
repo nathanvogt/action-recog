@@ -145,42 +145,42 @@ const PoseConnections: React.FC<{
 };
 
 const Grid: React.FC = () => {
-  const gridSize = 2;
-  const gridDivisions = 20;
-  const gridColor = "#888888";
+  const size = 2; // total width/height of the grid
+  const divisions = 20; // number of squares per side
+  const half = size / 2;
+  const step = size / divisions;
+  const color = "#888888";
 
   const lines = [];
-  const halfSize = gridSize / 2;
-  const step = gridSize / gridDivisions;
 
-  // Create grid lines parallel to X-axis
-  for (let i = 0; i <= gridDivisions; i++) {
-    const z = -halfSize + i * step;
+  // lines parallel to X-axis (vary x, constant z = 0)
+  for (let i = 0; i <= divisions; i++) {
+    const y = -half + i * step;
     lines.push(
-      <line key={`x-${i}`}>
+      <line key={`row-${i}`}>
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
-            args={[new Float32Array([-halfSize, 0, z, halfSize, 0, z]), 3]}
+            args={[new Float32Array([-half, y, 0, half, y, 0]), 3]}
           />
         </bufferGeometry>
-        <lineBasicMaterial color={gridColor} />
+        <lineBasicMaterial color={color} />
       </line>
     );
   }
 
-  // Create grid lines parallel to Z-axis
-  for (let i = 0; i <= gridDivisions; i++) {
-    const x = -halfSize + i * step;
+  // lines parallel to Y-axis (vary y, constant z = 0)
+  for (let i = 0; i <= divisions; i++) {
+    const x = -half + i * step;
     lines.push(
-      <line key={`z-${i}`}>
+      <line key={`col-${i}`}>
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
-            args={[new Float32Array([x, 0, -halfSize, x, 0, halfSize]), 3]}
+            args={[new Float32Array([x, -half, 0, x, half, 0]), 3]}
           />
         </bufferGeometry>
-        <lineBasicMaterial color={gridColor} />
+        <lineBasicMaterial color={color} />
       </line>
     );
   }
@@ -256,7 +256,12 @@ const _VisualizePose: React.FC<Props> = ({
           borderRadius: "8px",
         }}
       >
-        <Canvas camera={{ position: [2, 2, 2], fov: 50 }}>
+        <Canvas
+          camera={{ position: [2, 2, 2], fov: 50 }}
+          onCreated={({ camera }) => {
+            camera.up.set(0, 0, 1); // Z-up
+          }}
+        >
           <ambientLight intensity={0.5} />
           <pointLight position={[10, 10, 10]} />
 
