@@ -14,6 +14,7 @@ export const VisualizePose: React.FC = () => {
   const [poseData, setPoseData] = useState<[number, number, number][][] | null>(
     null
   );
+  const [repTimings, setRepTimings] = useState<number[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const remote = new TrainDatasetRemote("http://localhost:3001");
@@ -24,10 +25,15 @@ export const VisualizePose: React.FC = () => {
 
       setError(null);
       setPoseData(null);
+      setRepTimings(null);
 
       try {
-        const poses = await remote.getPoseArray(subject_id, exercise_name);
+        const [poses, timings] = await Promise.all([
+          remote.getPoseArray(subject_id, exercise_name),
+          remote.getRepTimings(subject_id, exercise_name),
+        ]);
         setPoseData(poses);
+        setRepTimings(timings);
       } catch (err) {
         setError(
           err instanceof Error
@@ -83,6 +89,7 @@ export const VisualizePose: React.FC = () => {
       subjectId={subject_id}
       exerciseName={exercise_name}
       poseData={poseData}
+      repTimings={repTimings}
     />
   );
 };
@@ -91,6 +98,7 @@ type Props = {
   exerciseName: string;
   subjectId: string;
   poseData: [number, number, number][][];
+  repTimings: number[] | null;
 };
 
 const PosePoint: React.FC<{ position: [number, number, number] }> = ({
@@ -192,9 +200,44 @@ const _VisualizePose: React.FC<Props> = ({
   exerciseName,
   subjectId,
   poseData,
+  repTimings,
 }) => {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Function to determine which rep the current frame belongs to
+  const getCurrentRep = () => {
+    if (!repTimings || repTimings.length === 0) return null;
+
+    for (let i = 0; i < repTimings.length - 1; i++) {
+      if (
+        currentFrameIndex >= repTimings[i] &&
+        currentFrameIndex < repTimings[i + 1]
+      ) {
+        return i + 1;
+      }
+    }
+
+    // Check if we're in the last rep
+    if (currentFrameIndex >= repTimings[repTimings.length - 1]) {
+      return repTimings.length;
+    }
+
+    return null; // Frame is before the first rep
+  };
+
+  // Function to jump to the beginning of a specific rep
+  const jumpToRep = (repIndex: number) => {
+    if (!repTimings || repIndex < 0 || repIndex >= repTimings.length) return;
+
+    // Pause playback if currently playing
+    if (isPlaying) {
+      setIsPlaying(false);
+    }
+
+    // Set frame to the start of the specified rep
+    setCurrentFrameIndex(repTimings[repIndex]);
+  };
 
   // Auto-advance frames when playing
   useEffect(() => {
@@ -233,6 +276,7 @@ const _VisualizePose: React.FC<Props> = ({
   }, [poseData.length, isPlaying]);
 
   const currentFrame: [number, number, number][] = poseData[currentFrameIndex];
+  const currentRep = getCurrentRep();
 
   return (
     <div>
@@ -244,7 +288,51 @@ const _VisualizePose: React.FC<Props> = ({
         Current Frame: {currentFrameIndex + 1}/{poseData.length}
       </p>
       <p>Status: {isPlaying ? "Playing" : "Paused"}</p>
-      <p className="text-sm text-gray-600">
+
+      {/* Rep Timings Section */}
+      {repTimings && repTimings.length > 0 ? (
+        <div className="mt-4 p-3 bg-gray-100 rounded-lg">
+          <h3 className="font-semibold text-lg mb-2">Rep Timings</h3>
+          <p className="mb-2">
+            <strong>Current Rep:</strong>{" "}
+            {currentRep ? `Rep ${currentRep}` : "Not in rep"}
+          </p>
+          <p className="mb-2">
+            <strong>Total Reps:</strong>{" "}
+            {repTimings.length > 1 ? repTimings.length - 1 : repTimings.length}
+          </p>
+          <div className="space-y-1">
+            {repTimings.length > 1 &&
+              repTimings.slice(0, -1).map((startFrame, index) => {
+                const endFrame = repTimings[index + 1];
+                const isCurrentRep = currentRep === index + 1;
+                return (
+                  <div
+                    key={index}
+                    className={`text-sm cursor-pointer transition-colors duration-200 hover:bg-blue-50 hover:text-blue-700 px-2 py-1 rounded ${
+                      isCurrentRep
+                        ? "font-bold text-blue-600 bg-blue-100"
+                        : "text-gray-700"
+                    }`}
+                    onClick={() => jumpToRep(index)}
+                    title={`Click to jump to Rep ${index + 1}`}
+                  >
+                    Rep {index + 1}: Frames {startFrame} - {endFrame - 1}(
+                    {endFrame - startFrame} frames)
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 p-3 bg-yellow-100 rounded-lg">
+          <p className="text-yellow-800">
+            No rep timing data available for this exercise instance.
+          </p>
+        </div>
+      )}
+
+      <p className="text-sm text-gray-600 mt-4">
         Use ← → arrow keys to navigate frames • Space bar to play/pause
       </p>
 
