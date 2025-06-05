@@ -52,6 +52,15 @@ export class TrainDatasetLocal implements TrainDataset {
     return instances;
   }
 
+  listCameraIds(subject: string): string[] {
+    const p = path.join(this.root, subject, "camera_parameters");
+    if (!fs.existsSync(p)) return [];
+    return fs
+      .readdirSync(p)
+      .filter((d) => fs.statSync(path.join(p, d)).isDirectory())
+      .sort();
+  }
+
   // ------------------------------------------------------------------
   // loading utilities
   // ------------------------------------------------------------------
@@ -70,7 +79,7 @@ export class TrainDatasetLocal implements TrainDataset {
     const p = path.join(this.root, subject, "joints3d_25", `${exercise}.json`);
     const data = JSON.parse(fs.readFileSync(p, "utf8")) as Record<string, any>;
 
-    let poses: number[][][] | null = null;
+    let poses: [number, number, number][][] | null = null;
     for (const key of ["joints3d_25", "joints3d", "poses3d"]) {
       if (key in data) {
         poses = data[key];
@@ -126,6 +135,46 @@ export class TrainDatasetLocal implements TrainDataset {
       seg.push([t[i], t[i + 1]]);
     }
     return seg;
+  }
+
+  getVideoBlob(subject: string, exercise: string, cameraId: string): Blob {
+    // Try common video file extensions and locations
+    const possiblePaths = [
+      path.join(this.root, subject, "videos", cameraId, `${exercise}.mp4`),
+      path.join(this.root, subject, "videos", cameraId, `${exercise}.webm`),
+      path.join(this.root, subject, "videos", cameraId, `${exercise}.mov`),
+      path.join(this.root, subject, cameraId, `${exercise}.mp4`),
+      path.join(this.root, subject, cameraId, `${exercise}.webm`),
+      path.join(this.root, subject, cameraId, `${exercise}.mov`),
+    ];
+
+    for (const videoPath of possiblePaths) {
+      if (fs.existsSync(videoPath)) {
+        const videoBuffer = fs.readFileSync(videoPath);
+        const mimeType = this.getMimeTypeFromPath(videoPath);
+        return new Blob([videoBuffer], { type: mimeType });
+      }
+    }
+
+    throw new Error(
+      `Video not found for subject: ${subject}, exercise: ${exercise}, camera: ${cameraId}`
+    );
+  }
+
+  private getMimeTypeFromPath(filePath: string): string {
+    const ext = path.extname(filePath).toLowerCase();
+    switch (ext) {
+      case ".mp4":
+        return "video/mp4";
+      case ".webm":
+        return "video/webm";
+      case ".mov":
+        return "video/quicktime";
+      case ".avi":
+        return "video/x-msvideo";
+      default:
+        return "video/mp4"; // default fallback
+    }
   }
 }
 
@@ -185,6 +234,16 @@ export class TrainDatasetRemote implements AsyncMethods<TrainDataset> {
     );
     if (!response.ok) {
       throw new Error(`Failed to list instances: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  async listCameraIds(subject: string): Promise<string[]> {
+    const response = await fetch(
+      `${this.baseUrl}/api/camera-ids/${encodeURIComponent(subject)}`
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to list camera IDs: ${response.statusText}`);
     }
     return response.json();
   }
@@ -270,5 +329,21 @@ export class TrainDatasetRemote implements AsyncMethods<TrainDataset> {
       throw new Error(`Failed to get rep segments: ${response.statusText}`);
     }
     return response.json();
+  }
+
+  async getVideoBlob(
+    subject: string,
+    exercise: string,
+    cameraId: string
+  ): Promise<Blob> {
+    const response = await fetch(
+      `${this.baseUrl}/api/video-blob/${encodeURIComponent(
+        subject
+      )}/${encodeURIComponent(exercise)}/${encodeURIComponent(cameraId)}`
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to get video blob: ${response.statusText}`);
+    }
+    return response.blob();
   }
 }

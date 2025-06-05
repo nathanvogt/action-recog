@@ -1,7 +1,7 @@
 export interface InstanceData {
   subject: string;
   exercise: string;
-  poses: number[][][];
+  poses: [number, number, number][][]; // [frame, kp, 3d point]
   timings: number[] | null;
   num_reps: number | undefined;
   info: Record<string, any>;
@@ -15,6 +15,7 @@ export interface TrainDataset {
   listExercisesForSubject(subject: string): string[];
   listAllExercises(): string[];
   listInstances(exercise: string): Array<[string, string]>;
+  listCameraIds(subject: string): string[];
 
   // Loading utilities
   loadRepAnnotations(subject: string): Record<string, number[]> | null;
@@ -28,4 +29,5 @@ export interface TrainDataset {
     subject: string,
     exercise: string
   ): Array<[number, number]> | null;
+  getVideoBlob(subject: string, exercise: string, cameraId: string): Blob;
 }

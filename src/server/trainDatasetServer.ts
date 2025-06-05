@@ -74,6 +74,20 @@ app.get("/api/instances/:exercise", (req: Request, res: Response) => {
   }
 });
 
+app.get("/api/camera-ids/:subject", (req: Request, res: Response) => {
+  try {
+    const { subject } = req.params;
+    const cameraIds = dataset.listCameraIds(subject);
+    res.json(cameraIds);
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    res
+      .status(500)
+      .json({ error: "Failed to list camera IDs", details: errorMessage });
+  }
+});
+
 // Loading utilities
 app.get("/api/rep-annotations/:subject", (req: Request, res: Response) => {
   try {
@@ -171,6 +185,44 @@ app.get(
   }
 );
 
+app.get(
+  "/api/video-blob/:subject/:exercise/:cameraId",
+  (req: Request, res: Response) => {
+    try {
+      const { subject, exercise, cameraId } = req.params;
+      const videoBlob = dataset.getVideoBlob(subject, exercise, cameraId);
+
+      // Convert Blob to Buffer for Express response
+      videoBlob
+        .arrayBuffer()
+        .then((arrayBuffer) => {
+          const buffer = Buffer.from(arrayBuffer);
+
+          // Set appropriate headers
+          res.setHeader("Content-Type", videoBlob.type || "video/mp4");
+          res.setHeader("Content-Length", buffer.length);
+          res.setHeader("Accept-Ranges", "bytes");
+
+          res.send(buffer);
+        })
+        .catch((error) => {
+          const errorMessage =
+            error instanceof Error ? error.message : "Unknown error";
+          res.status(500).json({
+            error: "Failed to process video blob",
+            details: errorMessage,
+          });
+        });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      res
+        .status(500)
+        .json({ error: "Failed to get video blob", details: errorMessage });
+    }
+  }
+);
+
 // Health check endpoint
 app.get("/health", (req: Request, res: Response) => {
   res.json({ status: "OK", timestamp: new Date().toISOString() });
@@ -195,6 +247,10 @@ app.listen(port, () => {
   );
   console.log("  GET /api/rep-timings/:subject/:exercise - Get rep timings");
   console.log("  GET /api/rep-segments/:subject/:exercise - Get rep segments");
+  console.log("  GET /api/camera-ids/:subject - List camera IDs");
+  console.log(
+    "  GET /api/video-blob/:subject/:exercise/:cameraId - Get video blob"
+  );
   console.log("  GET /health - Health check");
 });
 
