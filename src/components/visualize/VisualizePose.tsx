@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { TrainDatasetRemote } from "../../libs/trainDataset/trainDataset.js";
+import { CONNECTIONS } from "../../libs/data.js";
 
 export const VisualizePose: React.FC = () => {
   const { subject_id, exercise_name } = useParams<{
@@ -100,6 +101,46 @@ const PosePoint: React.FC<{ position: [number, number, number] }> = ({
       <sphereGeometry args={[0.02, 16, 16]} />
       <meshStandardMaterial color="red" />
     </mesh>
+  );
+};
+
+const PoseConnections: React.FC<{
+  points: [number, number, number][];
+}> = ({ points }) => {
+  return (
+    <>
+      {CONNECTIONS.map(([fromIndex, toIndex], connectionIndex) => {
+        // Check if both points exist in the current frame
+        if (!points[fromIndex] || !points[toIndex]) {
+          return null;
+        }
+
+        const fromPoint = points[fromIndex];
+        const toPoint = points[toIndex];
+
+        return (
+          <line key={connectionIndex}>
+            <bufferGeometry>
+              <bufferAttribute
+                attach="attributes-position"
+                args={[
+                  new Float32Array([
+                    fromPoint[0],
+                    fromPoint[1],
+                    fromPoint[2],
+                    toPoint[0],
+                    toPoint[1],
+                    toPoint[2],
+                  ]),
+                  3,
+                ]}
+              />
+            </bufferGeometry>
+            <lineBasicMaterial color="red" linewidth={2} />
+          </line>
+        );
+      })}
+    </>
   );
 };
 
@@ -224,6 +265,8 @@ const _VisualizePose: React.FC<Props> = ({
           {currentFrame.map((point, index) => (
             <PosePoint key={index} position={point} />
           ))}
+
+          <PoseConnections points={currentFrame} />
 
           <OrbitControls
             enablePan={true}
