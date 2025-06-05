@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import ExerciseMenu from "./menu/ExerciseMenu";
 import ExerciseInstanceMenu from "./menu/ExerciseInstanceMenu";
+import { VisualizePose } from "./visualize/VisualizePose";
 
 const Main: React.FC = () => {
   return (
@@ -16,6 +17,10 @@ const Main: React.FC = () => {
         <Route
           path="/menu/:subject_id/:exercise_name"
           element={<ExerciseInstanceMenu />}
+        />
+        <Route
+          path="/visualize/:subject_id/:exercise_name"
+          element={<VisualizePose />}
         />
         <Route path="/" element={<Navigate to="/menu" replace />} />
       </Routes>

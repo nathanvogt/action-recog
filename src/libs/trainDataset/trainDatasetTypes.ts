@@ -22,7 +22,7 @@ export interface TrainDataset {
   loadInstance(subject: string, exercise: string): InstanceData;
 
   // Convenience helpers
-  getPoseArray(subject: string, exercise: string): number[][][];
+  getPoseArray(subject: string, exercise: string): [number, number, number][][];
   subjectHasExercise(subject: string, exercise: string): boolean;
   getRepTimings(subject: string, exercise: string): number[] | null;
   getRepSegments(

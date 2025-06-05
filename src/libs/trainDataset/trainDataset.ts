@@ -111,7 +111,10 @@ export class TrainDatasetLocal implements TrainDataset {
   // ------------------------------------------------------------------
   // convenience helpers
   // ------------------------------------------------------------------
-  getPoseArray(subject: string, exercise: string): number[][][] {
+  getPoseArray(
+    subject: string,
+    exercise: string
+  ): [number, number, number][][] {
     return this.loadInstance(subject, exercise).poses;
   }
 
@@ -272,7 +275,10 @@ export class TrainDatasetRemote implements AsyncMethods<TrainDataset> {
     return response.json();
   }
 
-  async getPoseArray(subject: string, exercise: string): Promise<number[][][]> {
+  async getPoseArray(
+    subject: string,
+    exercise: string
+  ): Promise<[number, number, number][][]> {
     const response = await fetch(
       `${this.baseUrl}/api/poses/${encodeURIComponent(
         subject
