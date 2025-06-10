@@ -269,6 +269,10 @@ const _VisualizePose: React.FC<Props> = ({
   const c = 8;
   const m = 4;
   const [slsProcessor] = useState(() => new SlsMemoized(c, m));
+  const [lastProcessedRange, setLastProcessedRange] = useState<{
+    start: number;
+    end: number;
+  } | null>(null);
 
   const getCurrentRep = () => {
     if (!repTimings || repTimings.length === 0) return null;
@@ -301,7 +305,7 @@ const _VisualizePose: React.FC<Props> = ({
 
   const resetHistoryAnchor = () => {
     setHistoryAnchor(currentFrameIndex);
-    slsProcessor.reset();
+    // The useEffect will handle resetting the processor and range
   };
 
   useEffect(() => {
@@ -371,26 +375,58 @@ const _VisualizePose: React.FC<Props> = ({
     ? Math.abs(currentFrameIndex - historyAnchor) + 1
     : 1;
 
-  const getSlsRepresentation = (): [Point[][], number] | [null, null] => {
-    if (!showSls) return [null, null];
+  const [slsResult, setSlsResult] = useState<[Point[][], number] | null>(null);
+
+  // Effect to handle SLS processing
+  useEffect(() => {
+    if (!showSls) {
+      setLastProcessedRange(null);
+      setSlsResult(null);
+      return;
+    }
 
     const startIndex = Math.min(historyAnchor, currentFrameIndex);
     const endIndex = Math.max(historyAnchor, currentFrameIndex);
 
-    const windowPoses: [number, number, number][][] = [];
-    for (let i = startIndex; i <= endIndex; i++) {
-      windowPoses.push(poseData[i]);
+    // If anchor changed or this is the first time, reset everything
+    if (!lastProcessedRange || lastProcessedRange.start !== startIndex) {
+      slsProcessor.reset();
+      setLastProcessedRange({ start: startIndex, end: startIndex - 1 });
+      return; // Let the next effect run handle the processing
     }
 
-    if (windowPoses.length < 2) return [null, null];
+    const newFrames: [number, number, number][][] = [];
+    const startProcessingFrom = lastProcessedRange
+      ? Math.max(lastProcessedRange.end + 1, startIndex)
+      : startIndex;
+
+    for (let i = startProcessingFrom; i <= endIndex; i++) {
+      newFrames.push(poseData[i]);
+    }
+
+    // Need at least some frames to process
+    if (newFrames.length === 0) {
+      return; // Keep the previous result
+    }
+
+    // Need at least 2 total frames for SLS processing
+    if (endIndex - startIndex + 1 < 2) {
+      setSlsResult(null);
+      return;
+    }
 
     try {
-      const [slsResult, totalError] = slsProcessor.processPoses(windowPoses);
-      return [slsResult, totalError];
+      const [result, totalError] = slsProcessor.processPoses(newFrames);
+      setLastProcessedRange({ start: startIndex, end: endIndex });
+      setSlsResult([result, totalError]);
     } catch (error) {
       console.error("Error computing SLS representation:", error);
-      return [null, null];
+      setSlsResult(null);
     }
+  }, [showSls, historyAnchor, currentFrameIndex, lastProcessedRange]);
+
+  const getSlsRepresentation = (): [Point[][], number] | [null, null] => {
+    return slsResult || [null, null];
   };
 
   const [slsRepresentation, totalError] = getSlsRepresentation();
