@@ -174,6 +174,18 @@ const SlsPoint: React.FC<{
   );
 };
 
+const MemoPoint: React.FC<{
+  position: [number, number, number];
+  opacity: number;
+}> = ({ position, opacity }) => {
+  return (
+    <mesh position={position}>
+      <sphereGeometry args={[0.015, 16, 16]} />
+      <meshStandardMaterial color="#1E3A8A" transparent opacity={opacity} />
+    </mesh>
+  );
+};
+
 const SlsTrajectory: React.FC<{
   points: [number, number, number][];
   opacity: number;
@@ -266,7 +278,7 @@ const _VisualizePose: React.FC<Props> = ({
   const [showHistory, setShowHistory] = useState(true);
   const [historyAnchor, setHistoryAnchor] = useState(0);
   const [showSls, setShowSls] = useState(false);
-  const c = 8;
+  const c = 16;
   const m = 4;
   const [slsProcessor] = useState(() => new SlsMemoized(c, m));
   const [lastProcessedRange, setLastProcessedRange] = useState<{
@@ -376,12 +388,14 @@ const _VisualizePose: React.FC<Props> = ({
     : 1;
 
   const [slsResult, setSlsResult] = useState<[Point[][], number] | null>(null);
+  const [memoPoints, setMemoPoints] = useState<Point[][] | null>(null);
 
   // Effect to handle SLS processing
   useEffect(() => {
     if (!showSls) {
       setLastProcessedRange(null);
       setSlsResult(null);
+      setMemoPoints(null);
       return;
     }
 
@@ -404,12 +418,10 @@ const _VisualizePose: React.FC<Props> = ({
       newFrames.push(poseData[i]);
     }
 
-    // Need at least some frames to process
     if (newFrames.length === 0) {
-      return; // Keep the previous result
+      return;
     }
 
-    // Need at least 2 total frames for SLS processing
     if (endIndex - startIndex + 1 < 2) {
       setSlsResult(null);
       return;
@@ -419,9 +431,11 @@ const _VisualizePose: React.FC<Props> = ({
       const [result, totalError] = slsProcessor.processPoses(newFrames);
       setLastProcessedRange({ start: startIndex, end: endIndex });
       setSlsResult([result, totalError]);
+      setMemoPoints(slsProcessor.getMemPoints());
     } catch (error) {
       console.error("Error computing SLS representation:", error);
       setSlsResult(null);
+      setMemoPoints(null);
     }
   }, [showSls, historyAnchor, currentFrameIndex, lastProcessedRange]);
 
@@ -516,7 +530,7 @@ const _VisualizePose: React.FC<Props> = ({
         </div>
 
         <div className="text-xs text-gray-600">
-          ← → Space R{showSls && " • SLS: yellow"}
+          ← → Space R{showSls && " • SLS: yellow • Memo: dark blue"}
         </div>
       </div>
 
@@ -591,10 +605,26 @@ const _VisualizePose: React.FC<Props> = ({
                     <SlsPoint
                       key={`sls-${curveIndex}-${pointIndex}`}
                       position={point}
-                      opacity={1.0}
+                      opacity={0.6}
                     />
                   ))}
-                  <SlsTrajectory points={curve} opacity={1.0} />
+                  <SlsTrajectory points={curve} opacity={0.6} />
+                </group>
+              ))}
+            </group>
+          )}
+
+          {memoPoints && (
+            <group key="memo-points">
+              {memoPoints.map((keypointMemoPoints, keypointIndex) => (
+                <group key={`memo-keypoint-${keypointIndex}`}>
+                  {keypointMemoPoints.map((point, pointIndex) => (
+                    <MemoPoint
+                      key={`memo-${keypointIndex}-${pointIndex}`}
+                      position={point}
+                      opacity={0.8}
+                    />
+                  ))}
                 </group>
               ))}
             </group>
