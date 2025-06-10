@@ -1,4 +1,4 @@
-import { TrainDatasetRemote } from "../libs/trainDataset/trainDataset.js";
+import { TrainDatasetRemote } from "../libs/trainDataset/trainDataset";
 
 async function testRemoteDataset() {
   console.log("Testing TrainDatasetRemote...");
