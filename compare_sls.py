@@ -7,6 +7,8 @@ import os
 import numpy as np
 from typing import Dict, List, Any
 
+SAVE_RESULTS = False
+
 
 def run_python_test(subject: str, exercise: str) -> Dict[str, Any]:
     """Run Python SLS test and return results."""
@@ -159,10 +161,11 @@ def main():
     print()
 
     # Create temp directory in project folder for saving results
-    temp_dir = os.path.join("temp", f"sls_comparison_{subject}_{exercise}")
-    os.makedirs(temp_dir, exist_ok=True)
-    print(f"📁 Saving results to: {temp_dir}")
-    print()
+    if SAVE_RESULTS:
+        temp_dir = os.path.join("temp", f"sls_comparison_{subject}_{exercise}")
+        os.makedirs(temp_dir, exist_ok=True)
+        print(f"📁 Saving results to: {temp_dir}")
+        print()
 
     # Run both implementations with timing
     print("📊 Running TypeScript implementation...")
@@ -178,17 +181,18 @@ def main():
     py_duration = py_end_time - py_start_time
 
     # Save results to temp files
-    ts_file = os.path.join(temp_dir, "typescript_results.json")
-    py_file = os.path.join(temp_dir, "python_results.json")
+    if SAVE_RESULTS:
+        ts_file = os.path.join(temp_dir, "typescript_results.json")
+        py_file = os.path.join(temp_dir, "python_results.json")
 
-    with open(ts_file, "w") as f:
-        json.dump(ts_results, f, indent=2)
+        with open(ts_file, "w") as f:
+            json.dump(ts_results, f, indent=2)
 
-    with open(py_file, "w") as f:
-        json.dump(py_results, f, indent=2)
+        with open(py_file, "w") as f:
+            json.dump(py_results, f, indent=2)
 
-    print(f"💾 Saved TypeScript results to: {ts_file}")
-    print(f"💾 Saved Python results to: {py_file}")
+        print(f"💾 Saved TypeScript results to: {ts_file}")
+        print(f"💾 Saved Python results to: {py_file}")
 
     # Basic sanity checks
     if len(py_results["results"]) != len(ts_results["results"]):
@@ -240,10 +244,11 @@ def main():
     print(f"   Python: {py_duration:.3f}s")
     print(f"   Ratio (TS/Python): {ts_duration/py_duration:.2f}x")
 
-    print(f"\n📁 Results saved to:")
-    print(f"   Directory: {temp_dir}")
-    print(f"   TypeScript: typescript_results.json")
-    print(f"   Python: python_results.json")
+    if SAVE_RESULTS:
+        print(f"\n📁 Results saved to:")
+        print(f"   Directory: {temp_dir}")
+        print(f"   TypeScript: typescript_results.json")
+        print(f"   Python: python_results.json")
 
     if all_match:
         print("\n✅ All frames match! Implementations are identical.")
