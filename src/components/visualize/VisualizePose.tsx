@@ -410,140 +410,116 @@ const _VisualizePose: React.FC<Props> = ({
 
   return (
     <div>
-      <h1>Visualize Pose</h1>
-      <p>Subject ID: {subjectId}</p>
-      <p>Exercise Name: {exerciseName}</p>
-      <p>Pose Data: {poseData.length} frames</p>
-      <p>
-        Current Frame: {currentFrameIndex + 1}/{poseData.length}
-      </p>
-      <p>Status: {isPlaying ? "Playing" : "Paused"}</p>
+      {/* Compact Header */}
+      <div className="flex items-center justify-between mb-3 p-2 bg-gray-50 rounded">
+        <div className="flex items-center space-x-4 text-sm">
+          <span>
+            <strong>{subjectId}</strong> - {exerciseName}
+          </span>
+          <span>
+            Frame {currentFrameIndex + 1}/{poseData.length}
+          </span>
+          <span className={isPlaying ? "text-green-600" : "text-gray-600"}>
+            {isPlaying ? "Playing" : "Paused"}
+          </span>
+          {currentRep && (
+            <span className="text-blue-600">Rep {currentRep}</span>
+          )}
+        </div>
+      </div>
 
-      {/* History View Controls */}
-      <div className="mt-4 p-3 bg-blue-50 rounded-lg border">
-        <h3 className="font-semibold text-lg mb-3">View Controls</h3>
-
-        <div className="flex items-center space-x-4 mb-3">
-          <label className="flex items-center space-x-2">
+      {/* Compact Controls */}
+      <div className="flex items-center justify-between mb-3 p-2 bg-blue-50 rounded border">
+        <div className="flex items-center space-x-4">
+          <label className="flex items-center space-x-1 text-sm">
             <input
               type="checkbox"
               checked={showHistory}
               onChange={(e) => setShowHistory(e.target.checked)}
               className="rounded"
             />
-            <span className="font-medium">Show History</span>
+            <span>History</span>
           </label>
 
-          <label className="flex items-center space-x-2">
+          <label className="flex items-center space-x-1 text-sm">
             <input
               type="checkbox"
               checked={showSls}
               onChange={(e) => setShowSls(e.target.checked)}
               className="rounded"
             />
-            <span className="font-medium">Show SLS Representation</span>
+            <span>SLS</span>
           </label>
 
           {showHistory && (
-            <div className="text-sm text-blue-700">
-              Showing {historyWindowSize} frame
-              {historyWindowSize !== 1 ? "s" : ""}
-              (from frame {Math.min(historyAnchor, currentFrameIndex) +
-                1} to {Math.max(historyAnchor, currentFrameIndex) + 1})
-            </div>
+            <>
+              <div className="flex items-center space-x-1 text-sm">
+                <span>Anchor:</span>
+                <input
+                  type="number"
+                  min="0"
+                  max={poseData.length - 1}
+                  value={historyAnchor}
+                  onChange={(e) =>
+                    setHistoryAnchor(
+                      Math.max(
+                        0,
+                        Math.min(
+                          poseData.length - 1,
+                          parseInt(e.target.value) || 0
+                        )
+                      )
+                    )
+                  }
+                  className="w-16 px-1 py-0.5 text-sm border rounded"
+                />
+                <button
+                  onClick={resetHistoryAnchor}
+                  className="px-2 py-0.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  Reset
+                </button>
+              </div>
+              <span className="text-xs text-gray-600">
+                ({historyWindowSize} frame{historyWindowSize !== 1 ? "s" : ""})
+              </span>
+            </>
           )}
         </div>
 
-        {showHistory && (
-          <div className="space-y-2">
-            <div className="flex items-center space-x-3">
-              <label className="text-sm font-medium min-w-0">
-                History Anchor:
-              </label>
-              <input
-                type="number"
-                min="0"
-                max={poseData.length - 1}
-                value={historyAnchor}
-                onChange={(e) =>
-                  setHistoryAnchor(
-                    Math.max(
-                      0,
-                      Math.min(
-                        poseData.length - 1,
-                        parseInt(e.target.value) || 0
-                      )
-                    )
-                  )
-                }
-                className="w-20 px-2 py-1 text-sm border rounded"
-              />
-              <span className="text-sm text-gray-600">
-                (Frame {historyAnchor + 1})
-              </span>
-              <button
-                onClick={resetHistoryAnchor}
-                className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-              >
-                Reset to Current
-              </button>
-            </div>
-
-            <div className="text-xs text-gray-600">
-              Press 'R' key to reset history anchor to current frame
-            </div>
-          </div>
-        )}
+        <div className="text-xs text-gray-600">
+          ← → Space R{showSls && " • SLS: yellow"}
+        </div>
       </div>
 
-      {/* Rep Timings Section */}
-      {repTimings && repTimings.length > 0 ? (
-        <div className="mt-4 p-3 bg-gray-100 rounded-lg">
-          <h3 className="font-semibold text-lg mb-2">Rep Timings</h3>
-          <p className="mb-2">
-            <strong>Current Rep:</strong>{" "}
-            {currentRep ? `Rep ${currentRep}` : "Not in rep"}
-          </p>
-          <p className="mb-2">
-            <strong>Total Reps:</strong>{" "}
-            {repTimings.length > 1 ? repTimings.length - 1 : repTimings.length}
-          </p>
-          <div className="space-y-1">
-            {repTimings.length > 1 &&
-              repTimings.slice(0, -1).map((startFrame, index) => {
+      {/* Compact Rep Timings */}
+      {repTimings && repTimings.length > 1 && (
+        <div className="mb-3 p-2 bg-gray-50 rounded">
+          <div className="flex items-center space-x-2 text-sm">
+            <span className="font-medium">Reps ({repTimings.length - 1}):</span>
+            <div className="flex flex-wrap gap-1">
+              {repTimings.slice(0, -1).map((startFrame, index) => {
                 const endFrame = repTimings[index + 1];
                 const isCurrentRep = currentRep === index + 1;
                 return (
-                  <div
+                  <button
                     key={index}
-                    className={`text-sm cursor-pointer transition-colors duration-200 hover:bg-blue-50 hover:text-blue-700 px-2 py-1 rounded ${
-                      isCurrentRep
-                        ? "font-bold text-blue-600 bg-blue-100"
-                        : "text-gray-700"
-                    }`}
                     onClick={() => jumpToRep(index)}
-                    title={`Click to jump to Rep ${index + 1}`}
+                    className={`px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
+                      isCurrentRep
+                        ? "bg-blue-500 text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-blue-100"
+                    }`}
+                    title={`Frames ${startFrame}-${endFrame - 1}`}
                   >
-                    Rep {index + 1}: Frames {startFrame} - {endFrame - 1}(
-                    {endFrame - startFrame} frames)
-                  </div>
+                    {index + 1}
+                  </button>
                 );
               })}
+            </div>
           </div>
         </div>
-      ) : (
-        <div className="mt-4 p-3 bg-yellow-100 rounded-lg">
-          <p className="text-yellow-800">
-            No rep timing data available for this exercise instance.
-          </p>
-        </div>
       )}
-
-      <p className="text-sm text-gray-600 mt-4">
-        Use ← → arrow keys to navigate frames • Space bar to play/pause • R key
-        to reset history anchor
-        {showSls && " • SLS representation shown in bright yellow"}
-      </p>
 
       <div
         style={{
