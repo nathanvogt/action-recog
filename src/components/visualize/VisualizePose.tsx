@@ -14,6 +14,7 @@ import {
 } from "../../libs/data.js";
 import { SlsBasic } from "../../libs/sls/SlsBasic.js";
 import { Point } from "../../libs/sls/slsTypes.js";
+import { SlsMemoized } from "../../libs/sls/SlsMemoized.js";
 
 export const VisualizePose: React.FC = () => {
   const { subject_id, exercise_name } = useParams<{
@@ -267,7 +268,7 @@ const _VisualizePose: React.FC<Props> = ({
 }) => {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const [showHistory, setShowHistory] = useState(true);
   const [historyAnchor, setHistoryAnchor] = useState(0);
   const [showSls, setShowSls] = useState(false);
 
@@ -397,8 +398,9 @@ const _VisualizePose: React.FC<Props> = ({
     if (windowPoses.length < 2) return [null, null];
 
     try {
-      const c = 16;
-      const slsProcessor = new SlsBasic(c);
+      const c = 8;
+      const m = 4;
+      const slsProcessor = new SlsMemoized(c, m);
       const [slsResult, totalError] = slsProcessor.processPoses(windowPoses);
       return [slsResult, totalError];
     } catch (error) {
