@@ -396,7 +396,7 @@ const _VisualizePose: React.FC<Props> = ({
     if (windowPoses.length < 2) return null;
 
     try {
-      const c = 4;
+      const c = 16;
       const slsProcessor = new SlsBasic(c);
       const slsResult = slsProcessor.processPoses(windowPoses);
       return slsResult;
