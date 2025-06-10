@@ -2,8 +2,17 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
+import * as THREE from "three";
 import { TrainDatasetRemote } from "../../libs/trainDataset/trainDataset.js";
-import { CONNECTIONS } from "../../libs/data.js";
+import {
+  CONNECTIONS,
+  LEFT_LEG_NO_FEET,
+  RIGHT_LEG_NO_FEET,
+  LEFT_ARM_NO_HAND,
+  RIGHT_ARM_NO_HAND,
+  BACK,
+} from "../../libs/data.js";
+import { SlsBasic } from "../../libs/sls/SlsBasic.js";
 
 export const VisualizePose: React.FC = () => {
   const { subject_id, exercise_name } = useParams<{
@@ -152,6 +161,52 @@ const PoseConnections: React.FC<{
   );
 };
 
+const SlsPoint: React.FC<{
+  position: [number, number, number];
+  opacity: number;
+}> = ({ position, opacity }) => {
+  return (
+    <mesh position={position}>
+      <sphereGeometry args={[0.02, 16, 16]} />
+      <meshStandardMaterial color="#FFFF80" transparent opacity={opacity} />
+    </mesh>
+  );
+};
+
+const SlsTrajectory: React.FC<{
+  points: [number, number, number][];
+  opacity: number;
+}> = ({ points, opacity }) => {
+  return (
+    <>
+      {points.map((point, index) => {
+        // Connect each point to the next point in the trajectory
+        if (index < points.length - 1) {
+          const nextPoint = points[index + 1];
+
+          // Create a simple curve between the two points
+          const curve = new THREE.LineCurve3(
+            new THREE.Vector3(point[0], point[1], point[2]),
+            new THREE.Vector3(nextPoint[0], nextPoint[1], nextPoint[2])
+          );
+
+          return (
+            <mesh key={index}>
+              <tubeGeometry args={[curve, 2, 0.003, 8, false]} />
+              <meshStandardMaterial
+                color="#FFFF80"
+                transparent
+                opacity={opacity}
+              />
+            </mesh>
+          );
+        }
+        return null;
+      })}
+    </>
+  );
+};
+
 const Grid: React.FC = () => {
   const size = 2; // total width/height of the grid
   const divisions = 20; // number of squares per side
@@ -213,6 +268,7 @@ const _VisualizePose: React.FC<Props> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [historyAnchor, setHistoryAnchor] = useState(0);
+  const [showSls, setShowSls] = useState(false);
 
   // Function to determine which rep the current frame belongs to
   const getCurrentRep = () => {
@@ -323,6 +379,35 @@ const _VisualizePose: React.FC<Props> = ({
     ? Math.abs(currentFrameIndex - historyAnchor) + 1
     : 1;
 
+  // Compute SLS representation when enabled
+  const getSlsRepresentation = () => {
+    if (!showSls) return null;
+
+    const startIndex = Math.min(historyAnchor, currentFrameIndex);
+    const endIndex = Math.max(historyAnchor, currentFrameIndex);
+
+    // Extract pose data for the window defined by anchor and current frame
+    const windowPoses: [number, number, number][][] = [];
+    for (let i = startIndex; i <= endIndex; i++) {
+      windowPoses.push(poseData[i]);
+    }
+
+    // Need at least 2 frames for meaningful SLS processing
+    if (windowPoses.length < 2) return null;
+
+    try {
+      const c = 4;
+      const slsProcessor = new SlsBasic(c);
+      const slsResult = slsProcessor.processPoses(windowPoses);
+      return slsResult;
+    } catch (error) {
+      console.error("Error computing SLS representation:", error);
+      return null;
+    }
+  };
+
+  const slsRepresentation = getSlsRepresentation();
+
   return (
     <div>
       <h1>Visualize Pose</h1>
@@ -347,6 +432,16 @@ const _VisualizePose: React.FC<Props> = ({
               className="rounded"
             />
             <span className="font-medium">Show History</span>
+          </label>
+
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={showSls}
+              onChange={(e) => setShowSls(e.target.checked)}
+              className="rounded"
+            />
+            <span className="font-medium">Show SLS Representation</span>
           </label>
 
           {showHistory && (
@@ -447,6 +542,7 @@ const _VisualizePose: React.FC<Props> = ({
       <p className="text-sm text-gray-600 mt-4">
         Use ← → arrow keys to navigate frames • Space bar to play/pause • R key
         to reset history anchor
+        {showSls && " • SLS representation shown in bright yellow"}
       </p>
 
       <div
@@ -483,6 +579,26 @@ const _VisualizePose: React.FC<Props> = ({
               />
             </group>
           ))}
+
+          {/* Render SLS representation */}
+          {slsRepresentation && (
+            <group key="sls-representation">
+              {slsRepresentation.map((curve, curveIndex) => (
+                <group key={`sls-curve-${curveIndex}`}>
+                  {/* Render SLS points for this keypoint */}
+                  {curve.map((point, pointIndex) => (
+                    <SlsPoint
+                      key={`sls-${curveIndex}-${pointIndex}`}
+                      position={point}
+                      opacity={1.0}
+                    />
+                  ))}
+                  {/* Render trajectory connections for this keypoint */}
+                  <SlsTrajectory points={curve} opacity={1.0} />
+                </group>
+              ))}
+            </group>
+          )}
 
           <OrbitControls
             enablePan={true}
