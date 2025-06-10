@@ -8,6 +8,7 @@ __pycache__/
 __pycache__/**
 
 train/**
+test/**
 fit3d**
 .DS_Store
 **/.DS_Store/**
