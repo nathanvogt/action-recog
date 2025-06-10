@@ -94,27 +94,22 @@ export const VisualizePose: React.FC = () => {
   );
 };
 
-type Props = {
-  exerciseName: string;
-  subjectId: string;
-  poseData: [number, number, number][][];
-  repTimings: number[] | null;
-};
-
-const PosePoint: React.FC<{ position: [number, number, number] }> = ({
-  position,
-}) => {
+const PosePoint: React.FC<{
+  position: [number, number, number];
+  opacity: number;
+}> = ({ position, opacity }) => {
   return (
     <mesh position={position}>
-      <sphereGeometry args={[0.02, 16, 16]} />
-      <meshStandardMaterial color="red" />
+      <sphereGeometry args={[0.015, 16, 16]} />
+      <meshStandardMaterial color="red" transparent opacity={opacity} />
     </mesh>
   );
 };
 
 const PoseConnections: React.FC<{
   points: [number, number, number][];
-}> = ({ points }) => {
+  opacity: number;
+}> = ({ points, opacity }) => {
   return (
     <>
       {CONNECTIONS.map(([fromIndex, toIndex], connectionIndex) => {
@@ -144,7 +139,12 @@ const PoseConnections: React.FC<{
                 ]}
               />
             </bufferGeometry>
-            <lineBasicMaterial color="red" linewidth={2} />
+            <lineBasicMaterial
+              color="#87CEEB"
+              linewidth={2}
+              transparent
+              opacity={opacity}
+            />
           </line>
         );
       })}
@@ -196,6 +196,13 @@ const Grid: React.FC = () => {
   return <>{lines}</>;
 };
 
+type Props = {
+  exerciseName: string;
+  subjectId: string;
+  poseData: [number, number, number][][];
+  repTimings: number[] | null;
+};
+
 const _VisualizePose: React.FC<Props> = ({
   exerciseName,
   subjectId,
@@ -204,6 +211,8 @@ const _VisualizePose: React.FC<Props> = ({
 }) => {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyAnchor, setHistoryAnchor] = useState(0);
 
   // Function to determine which rep the current frame belongs to
   const getCurrentRep = () => {
@@ -239,6 +248,11 @@ const _VisualizePose: React.FC<Props> = ({
     setCurrentFrameIndex(repTimings[repIndex]);
   };
 
+  // Function to reset history anchor to current frame
+  const resetHistoryAnchor = () => {
+    setHistoryAnchor(currentFrameIndex);
+  };
+
   // Auto-advance frames when playing
   useEffect(() => {
     if (!isPlaying) return;
@@ -268,15 +282,46 @@ const _VisualizePose: React.FC<Props> = ({
         setCurrentFrameIndex(
           (prev) => (prev - 1 + poseData.length) % poseData.length
         );
+      } else if (event.key === "r" || event.key === "R") {
+        event.preventDefault();
+        resetHistoryAnchor();
       }
     };
 
     window.addEventListener("keydown", handleKeyPress);
     return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [poseData.length, isPlaying]);
+  }, [poseData.length, isPlaying, currentFrameIndex]);
 
   const currentFrame: [number, number, number][] = poseData[currentFrameIndex];
   const currentRep = getCurrentRep();
+
+  // Get frames to render based on mode
+  const getFramesToRender = () => {
+    if (!showHistory) {
+      return [{ frame: currentFrame, index: currentFrameIndex, opacity: 1.0 }];
+    }
+
+    const frames = [];
+    const startIndex = Math.min(historyAnchor, currentFrameIndex);
+    const endIndex = Math.max(historyAnchor, currentFrameIndex);
+
+    for (let i = startIndex; i <= endIndex; i++) {
+      const isCurrentFrame = i === currentFrameIndex;
+      const opacity = isCurrentFrame ? 1.0 : 0.2; // Current frame: full opacity, historical frames: constant low opacity
+      frames.push({
+        frame: poseData[i],
+        index: i,
+        opacity: opacity,
+      });
+    }
+
+    return frames;
+  };
+
+  const framesToRender = getFramesToRender();
+  const historyWindowSize = showHistory
+    ? Math.abs(currentFrameIndex - historyAnchor) + 1
+    : 1;
 
   return (
     <div>
@@ -288,6 +333,73 @@ const _VisualizePose: React.FC<Props> = ({
         Current Frame: {currentFrameIndex + 1}/{poseData.length}
       </p>
       <p>Status: {isPlaying ? "Playing" : "Paused"}</p>
+
+      {/* History View Controls */}
+      <div className="mt-4 p-3 bg-blue-50 rounded-lg border">
+        <h3 className="font-semibold text-lg mb-3">View Controls</h3>
+
+        <div className="flex items-center space-x-4 mb-3">
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={showHistory}
+              onChange={(e) => setShowHistory(e.target.checked)}
+              className="rounded"
+            />
+            <span className="font-medium">Show History</span>
+          </label>
+
+          {showHistory && (
+            <div className="text-sm text-blue-700">
+              Showing {historyWindowSize} frame
+              {historyWindowSize !== 1 ? "s" : ""}
+              (from frame {Math.min(historyAnchor, currentFrameIndex) +
+                1} to {Math.max(historyAnchor, currentFrameIndex) + 1})
+            </div>
+          )}
+        </div>
+
+        {showHistory && (
+          <div className="space-y-2">
+            <div className="flex items-center space-x-3">
+              <label className="text-sm font-medium min-w-0">
+                History Anchor:
+              </label>
+              <input
+                type="number"
+                min="0"
+                max={poseData.length - 1}
+                value={historyAnchor}
+                onChange={(e) =>
+                  setHistoryAnchor(
+                    Math.max(
+                      0,
+                      Math.min(
+                        poseData.length - 1,
+                        parseInt(e.target.value) || 0
+                      )
+                    )
+                  )
+                }
+                className="w-20 px-2 py-1 text-sm border rounded"
+              />
+              <span className="text-sm text-gray-600">
+                (Frame {historyAnchor + 1})
+              </span>
+              <button
+                onClick={resetHistoryAnchor}
+                className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+              >
+                Reset to Current
+              </button>
+            </div>
+
+            <div className="text-xs text-gray-600">
+              Press 'R' key to reset history anchor to current frame
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Rep Timings Section */}
       {repTimings && repTimings.length > 0 ? (
@@ -333,13 +445,14 @@ const _VisualizePose: React.FC<Props> = ({
       )}
 
       <p className="text-sm text-gray-600 mt-4">
-        Use ← → arrow keys to navigate frames • Space bar to play/pause
+        Use ← → arrow keys to navigate frames • Space bar to play/pause • R key
+        to reset history anchor
       </p>
 
       <div
         style={{
           width: "100%",
-          height: "600px",
+          height: "800px",
           border: "2px solid #ccc",
           borderRadius: "8px",
         }}
@@ -355,11 +468,21 @@ const _VisualizePose: React.FC<Props> = ({
 
           <Grid />
 
-          {currentFrame.map((point, index) => (
-            <PosePoint key={index} position={point} />
+          {framesToRender.map((frameData, frameIdx) => (
+            <group key={`frame-${frameData.index}`}>
+              {frameData.frame.map((point, pointIndex) => (
+                <PosePoint
+                  key={`${frameData.index}-${pointIndex}`}
+                  position={point}
+                  opacity={frameData.opacity}
+                />
+              ))}
+              <PoseConnections
+                points={frameData.frame}
+                opacity={frameData.opacity}
+              />
+            </group>
           ))}
-
-          <PoseConnections points={currentFrame} />
 
           <OrbitControls
             enablePan={true}
