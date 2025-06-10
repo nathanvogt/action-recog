@@ -452,6 +452,13 @@ const _VisualizePose: React.FC<Props> = ({
             <span>SLS</span>
           </label>
 
+          {showSls && totalError !== null && (
+            <div className="flex items-center space-x-1 text-sm text-blue-600">
+              <span>Error:</span>
+              <span className="font-mono">{totalError.toFixed(4)}</span>
+            </div>
+          )}
+
           {showHistory && (
             <>
               <div className="flex items-center space-x-1 text-sm">
