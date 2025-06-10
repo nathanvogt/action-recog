@@ -31,7 +31,7 @@ export class SlsBasic implements SegmentedLeastSquares {
     return [segmentPoints, cost];
   }
 
-  processPoses(poses: Point[][], keypoints?: number[]): Point[][] {
+  processPoses(poses: Point[][], keypoints?: number[]): [Point[][], number] {
     if (!keypoints) {
       keypoints = [
         ...LEFT_LEG_NO_FEET,
@@ -48,13 +48,16 @@ export class SlsBasic implements SegmentedLeastSquares {
     }
 
     const result: Point[][] = [];
+    let totalError = 0;
     for (let i = 0; i < keypoints.length; i++) {
       const kp = keypoints[i];
       const curve = curves[kp];
-      result[i] = this.processPoints(curve);
+      const [segmentPoints, cost] = this.processPointsWithCost(curve);
+      result[i] = segmentPoints;
+      totalError += cost;
     }
 
-    return result;
+    return [result, totalError];
   }
 
   getConfig(): { c: number; m: number } {

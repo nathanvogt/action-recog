@@ -19,9 +19,9 @@ export interface SegmentedLeastSquares {
    * Process a sequence of poses (frames of multiple keypoints)
    * @param poses Array of frames, where each frame is an array of keypoints
    * @param keypoints Optional array of keypoint indices to process
-   * @returns Array of segmented curves, one for each processed keypoint
+   * @returns Tuple of [segmented curves (one for each processed keypoint), total error]
    */
-  processPoses(poses: Point[][], keypoints?: number[]): Point[][];
+  processPoses(poses: Point[][], keypoints?: number[]): [Point[][], number];
 
   /**
    * Get the current configuration

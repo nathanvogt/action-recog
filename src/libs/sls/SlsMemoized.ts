@@ -66,7 +66,7 @@ export class SlsMemoized implements SegmentedLeastSquares {
     return [output, uniq, loss];
   }
 
-  processPoses(poses: Point[][], keypoints?: number[]): Point[][] {
+  processPoses(poses: Point[][], keypoints?: number[]): [Point[][], number] {
     if (!keypoints) {
       keypoints = [
         ...LEFT_LEG_NO_FEET,
@@ -85,6 +85,7 @@ export class SlsMemoized implements SegmentedLeastSquares {
 
     const lssCurves: Point[][] = keypoints.map(() => []);
     const curves: Point[][] = [];
+    let totalError = 0;
 
     // Build curves for each keypoint
     for (let kp = 0; kp < poses[0].length; kp++) {
@@ -103,17 +104,18 @@ export class SlsMemoized implements SegmentedLeastSquares {
           lssCurves[i] = [curve[0]];
         } else {
           this.memIndices[i].push(frame);
-          const [points_, indices_] = this.processPointsWithMemo(
+          const [points_, indices_, loss] = this.processPointsWithMemo(
             curve,
             this.memIndices[i]
           );
           this.memIndices[i] = indices_;
           lssCurves[i] = points_;
+          totalError += loss;
         }
       }
     }
 
-    return lssCurves;
+    return [lssCurves, totalError];
   }
 
   /**

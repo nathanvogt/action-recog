@@ -13,6 +13,7 @@ import {
   BACK,
 } from "../../libs/data.js";
 import { SlsBasic } from "../../libs/sls/SlsBasic.js";
+import { Point } from "../../libs/sls/slsTypes.js";
 
 export const VisualizePose: React.FC = () => {
   const { subject_id, exercise_name } = useParams<{
@@ -380,8 +381,8 @@ const _VisualizePose: React.FC<Props> = ({
     : 1;
 
   // Compute SLS representation when enabled
-  const getSlsRepresentation = () => {
-    if (!showSls) return null;
+  const getSlsRepresentation = (): [Point[][], number] | [null, null] => {
+    if (!showSls) return [null, null];
 
     const startIndex = Math.min(historyAnchor, currentFrameIndex);
     const endIndex = Math.max(historyAnchor, currentFrameIndex);
@@ -393,20 +394,20 @@ const _VisualizePose: React.FC<Props> = ({
     }
 
     // Need at least 2 frames for meaningful SLS processing
-    if (windowPoses.length < 2) return null;
+    if (windowPoses.length < 2) return [null, null];
 
     try {
       const c = 16;
       const slsProcessor = new SlsBasic(c);
-      const slsResult = slsProcessor.processPoses(windowPoses);
-      return slsResult;
+      const [slsResult, totalError] = slsProcessor.processPoses(windowPoses);
+      return [slsResult, totalError];
     } catch (error) {
       console.error("Error computing SLS representation:", error);
-      return null;
+      return [null, null];
     }
   };
 
-  const slsRepresentation = getSlsRepresentation();
+  const [slsRepresentation, totalError] = getSlsRepresentation();
 
   return (
     <div>
