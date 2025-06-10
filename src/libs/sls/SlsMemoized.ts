@@ -86,6 +86,7 @@ export class SlsMemoized implements SegmentedLeastSquares {
    *   * `lssCurves[i]` is the updated SLS curve for the *i-th* requested keypoint.
    *   * `totalLoss`    is the sum of approximation errors for this batch.
    */
+  //   TODO: normalize each curve loss by length
   processPoses(
     newPoses: Point[][],
     keypoints: number[] = [

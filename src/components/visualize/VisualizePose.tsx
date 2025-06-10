@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -21,6 +21,7 @@ export const VisualizePose: React.FC = () => {
     subject_id: string;
     exercise_name: string;
   }>();
+  const navigate = useNavigate();
 
   const [poseData, setPoseData] = useState<[number, number, number][][] | null>(
     null
@@ -101,6 +102,7 @@ export const VisualizePose: React.FC = () => {
       exerciseName={exercise_name}
       poseData={poseData}
       repTimings={repTimings}
+      navigate={navigate}
     />
   );
 };
@@ -265,6 +267,7 @@ type Props = {
   subjectId: string;
   poseData: [number, number, number][][];
   repTimings: number[] | null;
+  navigate: (path: string) => void;
 };
 
 const _VisualizePose: React.FC<Props> = ({
@@ -272,14 +275,15 @@ const _VisualizePose: React.FC<Props> = ({
   subjectId,
   poseData,
   repTimings,
+  navigate,
 }) => {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
   const [historyAnchor, setHistoryAnchor] = useState(0);
   const [showSls, setShowSls] = useState(false);
-  const c = 16;
-  const m = 4;
+  const c = 32;
+  const m = 8;
   const [slsProcessor] = useState(() => new SlsMemoized(c, m));
   const [lastProcessedRange, setLastProcessedRange] = useState<{
     start: number;
@@ -449,6 +453,12 @@ const _VisualizePose: React.FC<Props> = ({
     <div>
       <div className="flex items-center justify-between mb-3 p-2 bg-gray-50 rounded">
         <div className="flex items-center space-x-4 text-sm">
+          <button
+            onClick={() => navigate("/")}
+            className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          >
+            ← Main Menu
+          </button>
           <span>
             <strong>{subjectId}</strong> - {exerciseName}
           </span>

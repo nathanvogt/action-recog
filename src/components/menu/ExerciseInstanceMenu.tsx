@@ -90,12 +90,22 @@ const ExerciseInstanceMenu: React.FC = () => {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Exercise Instance</h1>
-        <button
-          onClick={() => navigate("/")}
-          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors font-medium"
-        >
-          ← Back to Main Menu
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() =>
+              navigate(`/visualize/${subject_id}/${exercise_name}`)
+            }
+            className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors font-medium"
+          >
+            📊 Open Visualizer
+          </button>
+          <button
+            onClick={() => navigate("/")}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors font-medium"
+          >
+            ← Back to Main Menu
+          </button>
+        </div>
       </div>
       <div className="space-y-4">
         <div className="space-y-2">
