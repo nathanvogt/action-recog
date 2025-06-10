@@ -124,7 +124,6 @@ const PoseConnections: React.FC<{
   return (
     <>
       {CONNECTIONS.map(([fromIndex, toIndex], connectionIndex) => {
-        // Check if both points exist in the current frame
         if (!points[fromIndex] || !points[toIndex]) {
           return null;
         }
@@ -182,11 +181,9 @@ const SlsTrajectory: React.FC<{
   return (
     <>
       {points.map((point, index) => {
-        // Connect each point to the next point in the trajectory
         if (index < points.length - 1) {
           const nextPoint = points[index + 1];
 
-          // Create a simple curve between the two points
           const curve = new THREE.LineCurve3(
             new THREE.Vector3(point[0], point[1], point[2]),
             new THREE.Vector3(nextPoint[0], nextPoint[1], nextPoint[2])
@@ -210,15 +207,14 @@ const SlsTrajectory: React.FC<{
 };
 
 const Grid: React.FC = () => {
-  const size = 2; // total width/height of the grid
-  const divisions = 20; // number of squares per side
+  const size = 2;
+  const divisions = 20;
   const half = size / 2;
   const step = size / divisions;
   const color = "#888888";
 
   const lines = [];
 
-  // lines parallel to X-axis (vary x, constant z = 0)
   for (let i = 0; i <= divisions; i++) {
     const y = -half + i * step;
     lines.push(
@@ -234,7 +230,6 @@ const Grid: React.FC = () => {
     );
   }
 
-  // lines parallel to Y-axis (vary y, constant z = 0)
   for (let i = 0; i <= divisions; i++) {
     const x = -half + i * step;
     lines.push(
@@ -271,8 +266,10 @@ const _VisualizePose: React.FC<Props> = ({
   const [showHistory, setShowHistory] = useState(true);
   const [historyAnchor, setHistoryAnchor] = useState(0);
   const [showSls, setShowSls] = useState(false);
+  const c = 8;
+  const m = 4;
+  const [slsProcessor] = useState(() => new SlsMemoized(c, m));
 
-  // Function to determine which rep the current frame belongs to
   const getCurrentRep = () => {
     if (!repTimings || repTimings.length === 0) return null;
 
@@ -285,57 +282,51 @@ const _VisualizePose: React.FC<Props> = ({
       }
     }
 
-    // Check if we're in the last rep
     if (currentFrameIndex >= repTimings[repTimings.length - 1]) {
       return repTimings.length;
     }
 
-    return null; // Frame is before the first rep
+    return null;
   };
 
-  // Function to jump to the beginning of a specific rep
   const jumpToRep = (repIndex: number) => {
     if (!repTimings || repIndex < 0 || repIndex >= repTimings.length) return;
 
-    // Pause playback if currently playing
     if (isPlaying) {
       setIsPlaying(false);
     }
 
-    // Set frame to the start of the specified rep
     setCurrentFrameIndex(repTimings[repIndex]);
   };
 
-  // Function to reset history anchor to current frame
   const resetHistoryAnchor = () => {
     setHistoryAnchor(currentFrameIndex);
+    slsProcessor.reset();
   };
 
-  // Auto-advance frames when playing
   useEffect(() => {
     if (!isPlaying) return;
 
     const interval = setInterval(() => {
       setCurrentFrameIndex((prev) => (prev + 1) % poseData.length);
-    }, 1000 / 30); // 30 fps
+    }, 1000 / 30);
 
     return () => clearInterval(interval);
   }, [isPlaying, poseData.length]);
 
-  // Handle keyboard navigation
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
       if (event.key === " ") {
-        event.preventDefault(); // Prevent page scroll
+        event.preventDefault();
         setIsPlaying((prev) => !prev);
       } else if (event.key === "ArrowRight") {
         if (isPlaying) {
-          setIsPlaying(false); // Pause first
+          setIsPlaying(false);
         }
         setCurrentFrameIndex((prev) => (prev + 1) % poseData.length);
       } else if (event.key === "ArrowLeft") {
         if (isPlaying) {
-          setIsPlaying(false); // Pause first
+          setIsPlaying(false);
         }
         setCurrentFrameIndex(
           (prev) => (prev - 1 + poseData.length) % poseData.length
@@ -353,7 +344,6 @@ const _VisualizePose: React.FC<Props> = ({
   const currentFrame: [number, number, number][] = poseData[currentFrameIndex];
   const currentRep = getCurrentRep();
 
-  // Get frames to render based on mode
   const getFramesToRender = () => {
     if (!showHistory) {
       return [{ frame: currentFrame, index: currentFrameIndex, opacity: 1.0 }];
@@ -365,7 +355,7 @@ const _VisualizePose: React.FC<Props> = ({
 
     for (let i = startIndex; i <= endIndex; i++) {
       const isCurrentFrame = i === currentFrameIndex;
-      const opacity = isCurrentFrame ? 1.0 : 0.2; // Current frame: full opacity, historical frames: constant low opacity
+      const opacity = isCurrentFrame ? 1.0 : 0.2;
       frames.push({
         frame: poseData[i],
         index: i,
@@ -381,26 +371,20 @@ const _VisualizePose: React.FC<Props> = ({
     ? Math.abs(currentFrameIndex - historyAnchor) + 1
     : 1;
 
-  // Compute SLS representation when enabled
   const getSlsRepresentation = (): [Point[][], number] | [null, null] => {
     if (!showSls) return [null, null];
 
     const startIndex = Math.min(historyAnchor, currentFrameIndex);
     const endIndex = Math.max(historyAnchor, currentFrameIndex);
 
-    // Extract pose data for the window defined by anchor and current frame
     const windowPoses: [number, number, number][][] = [];
     for (let i = startIndex; i <= endIndex; i++) {
       windowPoses.push(poseData[i]);
     }
 
-    // Need at least 2 frames for meaningful SLS processing
     if (windowPoses.length < 2) return [null, null];
 
     try {
-      const c = 8;
-      const m = 4;
-      const slsProcessor = new SlsMemoized(c, m);
       const [slsResult, totalError] = slsProcessor.processPoses(windowPoses);
       return [slsResult, totalError];
     } catch (error) {
@@ -413,7 +397,6 @@ const _VisualizePose: React.FC<Props> = ({
 
   return (
     <div>
-      {/* Compact Header */}
       <div className="flex items-center justify-between mb-3 p-2 bg-gray-50 rounded">
         <div className="flex items-center space-x-4 text-sm">
           <span>
@@ -431,7 +414,6 @@ const _VisualizePose: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Compact Controls */}
       <div className="flex items-center justify-between mb-3 p-2 bg-blue-50 rounded border">
         <div className="flex items-center space-x-4">
           <label className="flex items-center space-x-1 text-sm">
@@ -502,7 +484,6 @@ const _VisualizePose: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Compact Rep Timings */}
       {repTimings && repTimings.length > 1 && (
         <div className="mb-3 p-2 bg-gray-50 rounded">
           <div className="flex items-center space-x-2 text-sm">
@@ -542,7 +523,7 @@ const _VisualizePose: React.FC<Props> = ({
         <Canvas
           camera={{ position: [2, 2, 2], fov: 50 }}
           onCreated={({ camera }) => {
-            camera.up.set(0, 0, 1); // Z-up
+            camera.up.set(0, 0, 1);
           }}
         >
           <ambientLight intensity={0.5} />
@@ -566,12 +547,10 @@ const _VisualizePose: React.FC<Props> = ({
             </group>
           ))}
 
-          {/* Render SLS representation */}
           {slsRepresentation && (
             <group key="sls-representation">
               {slsRepresentation.map((curve, curveIndex) => (
                 <group key={`sls-curve-${curveIndex}`}>
-                  {/* Render SLS points for this keypoint */}
                   {curve.map((point, pointIndex) => (
                     <SlsPoint
                       key={`sls-${curveIndex}-${pointIndex}`}
@@ -579,7 +558,6 @@ const _VisualizePose: React.FC<Props> = ({
                       opacity={1.0}
                     />
                   ))}
-                  {/* Render trajectory connections for this keypoint */}
                   <SlsTrajectory points={curve} opacity={1.0} />
                 </group>
               ))}
