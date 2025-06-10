@@ -3,6 +3,9 @@ from __future__ import annotations
 import math
 from typing import List, Tuple, Dict, Sequence
 
+import numpy as np
+from numba import njit, prange
+
 # ────────────────────────────── generic types ──────────────────────────────
 Point = Tuple[float, float, float]
 
@@ -85,6 +88,7 @@ CONNECTIONS: List[Tuple[int, int]] = [
 
 
 # ───────────────────────────── math helpers ────────────────────────────────
+@njit(fastmath=True, cache=True)
 def shortest_distance(p1: Point, p2: Point, p: Point) -> float:
     """Point‐to‐segment distance in 3-D (used by SLS loss)."""
     line_vec = (p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2])
@@ -99,8 +103,8 @@ def shortest_distance(p1: Point, p2: Point, p: Point) -> float:
     norm = math.sqrt(line_vec[0] ** 2 + line_vec[1] ** 2 + line_vec[2] ** 2) or 1e-5
     dist = math.sqrt(cross[0] ** 2 + cross[1] ** 2 + cross[2] ** 2) / norm
 
-    p1_dist = math.dist(p, p1)
-    p2_dist = math.dist(p, p2)
+    p1_dist = math.sqrt((p[0] - p1[0]) ** 2 + (p[1] - p1[1]) ** 2 + (p[2] - p1[2]) ** 2)
+    p2_dist = math.sqrt((p[0] - p2[0]) ** 2 + (p[1] - p2[1]) ** 2 + (p[2] - p2[2]) ** 2)
     closer, farther = (p1, p2) if p1_dist <= p2_dist else (p2, p1)
     vec = (farther[0] - closer[0], farther[1] - closer[1], farther[2] - closer[2])
     dot = vec[0] * point_vec[0] + vec[1] * point_vec[1] + vec[2] * point_vec[2]
@@ -111,25 +115,26 @@ def shortest_distance(p1: Point, p2: Point, p: Point) -> float:
     return dist
 
 
+@njit(fastmath=True, cache=True)
 def segmented_least_squares_fixed_segments(
     points: Sequence[Point], num_segments: int
-) -> Tuple[float, List[int]]:
+) -> Tuple[float, np.ndarray]:
     """
     Classic dynamic-programming SLS with a *fixed* number of segments.
     Returns (total_loss, segment_end_indices).
     """
     n = len(points)
     if num_segments >= n:
-        return 0.0, []
+        return 0.0, np.empty(0, dtype=np.int64)
 
     # pre-compute error table E[i][j]  (cost of fitting a single segment i…j)
-    E = [[0.0] * n for _ in range(n)]
+    E = np.zeros((n, n), dtype=np.float64)
     for j in range(n):
         for i in range(j + 1):
-            E[i][j] = sum(
-                shortest_distance(points[i], points[j], points[k])
-                for k in range(i, j + 1)
-            )
+            s = 0.0
+            for k in range(i, j + 1):
+                s += shortest_distance(points[i], points[j], points[k])
+            E[i, j] = s
 
     # DP tables
     dp = [[math.inf] * (num_segments + 1) for _ in range(n)]
@@ -158,7 +163,7 @@ def segmented_least_squares_fixed_segments(
         k -= 1
     idx.append(0)
     idx.reverse()
-    return dp[n - 1][num_segments], idx
+    return dp[n - 1][num_segments], np.array(idx, dtype=np.int64)
 
 
 DEFAULT_C = 9

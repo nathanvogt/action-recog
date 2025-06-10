@@ -23,7 +23,7 @@ function testSlsTypeScript(
   exercise: string,
   c: number = 9,
   m: number = 4,
-  maxFrames: number = 50
+  maxFrames: number = 100
 ) {
   // Load dataset
   const dataset = new TrainDatasetLocal("train");

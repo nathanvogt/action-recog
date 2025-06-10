@@ -17,7 +17,7 @@ DEFAULT_KEYPOINTS = (
 
 
 def test_sls_python(
-    subject: str, exercise: str, c: int = 9, m: int = 4, max_frames: int = 50
+    subject: str, exercise: str, c: int = 9, m: int = 4, max_frames: int = 100
 ):
     """Test Python SLS implementation and output results to JSON."""
 

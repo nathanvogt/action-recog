@@ -216,7 +216,15 @@ def main():
                     f"   Curves max difference: {comparison['curves']['max_difference']:.8f}"
                 )
             if not comparison["memo"]["matches"]:
-                print(f"   Memo indices differ")
+                mismatched_count = sum(
+                    1
+                    for detail in comparison["memo"]["details"]
+                    if not detail["matches"]
+                )
+                total_count = len(comparison["memo"]["details"])
+                print(
+                    f"   Memo indices differ: {mismatched_count}/{total_count} keypoints"
+                )
         else:
             print(
                 f"✅ Frame {i}: MATCH (loss diff: {comparison['loss']['difference']:.8f})"
