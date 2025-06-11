@@ -3,6 +3,7 @@ import argparse
 import torch
 import numpy as np
 import yaml
+import json
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
@@ -188,24 +189,97 @@ class PPOTrainer:
         # Run evaluation episodes
         episode_rewards = []
         episode_lengths = []
+        replay_data = []
 
         for episode in range(n_episodes):
-            obs = env.reset()
+            obs, info = env.reset()
             done = False
             episode_reward = 0
             episode_length = 0
 
+            # Initialize episode replay data if saving replays
+            episode_replay = None
+            if hasattr(self.config, "save_replay") and self.config.save_replay:
+                episode_replay = {
+                    "episode_number": episode + 1,
+                    "subject": self.config.eval_subject or self.config.subject,
+                    "exercise": self.config.eval_exercise or self.config.exercise,
+                    "model_path": model_path,
+                    "env_config": {
+                        "c": self.config.c,
+                        "m": self.config.m,
+                        "tol": self.config.tol,
+                        "dataset_root": self.config.dataset_root,
+                    },
+                    "initial_info": info,
+                    "steps": [],
+                }
+
             while not done:
                 action, _ = model.predict(obs, deterministic=True)
-                obs, reward, done, info = env.step(action)
+                new_obs, reward, terminated, truncated, info = env.step(action)
+                done = terminated or truncated
                 episode_reward += reward
                 episode_length += 1
+
+                # Save step data if recording replay
+                if episode_replay is not None:
+                    step_data = {
+                        "timestep": episode_length,
+                        "observation": obs.tolist() if hasattr(obs, "tolist") else obs,
+                        "action": int(action) if hasattr(action, "item") else action,
+                        "reward": float(reward),
+                        "terminated": terminated,
+                        "truncated": truncated,
+                        "info": info,
+                    }
+                    episode_replay["steps"].append(step_data)
+
+                obs = new_obs
+
+            # Finalize episode replay data
+            if episode_replay is not None:
+                episode_replay["total_reward"] = float(episode_reward)
+                episode_replay["episode_length"] = episode_length
+                replay_data.append(episode_replay)
 
             episode_rewards.append(episode_reward)
             episode_lengths.append(episode_length)
             print(
                 f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Length = {episode_length}"
             )
+
+        # Save replay data if enabled
+        if (
+            hasattr(self.config, "save_replay")
+            and self.config.save_replay
+            and replay_data
+        ):
+            replay_filename = f"replay_{self.config.eval_subject or self.config.subject}_{self.config.eval_exercise or self.config.exercise}_episodes.json"
+            replay_path = os.path.join(self.config.save_path, replay_filename)
+
+            os.makedirs(os.path.dirname(replay_path), exist_ok=True)
+
+            replay_summary = {
+                "metadata": {
+                    "subject": self.config.eval_subject or self.config.subject,
+                    "exercise": self.config.eval_exercise or self.config.exercise,
+                    "model_path": model_path,
+                    "n_episodes": n_episodes,
+                    "env_config": {
+                        "c": self.config.c,
+                        "m": self.config.m,
+                        "tol": self.config.tol,
+                        "dataset_root": self.config.dataset_root,
+                    },
+                },
+                "episodes": replay_data,
+            }
+
+            with open(replay_path, "w") as f:
+                json.dump(replay_summary, f, indent=2)
+
+            print(f"Replay data saved to: {replay_path}")
 
         print(f"\nEvaluation Results ({n_episodes} episodes):")
         print(
@@ -321,6 +395,9 @@ def create_config():
     parser.add_argument("--model-path", type=str, help="Path to model for evaluation")
     parser.add_argument(
         "--n-eval-eps", type=int, default=10, help="Number of episodes for evaluation"
+    )
+    parser.add_argument(
+        "--save-replay", action="store_true", help="Save replay data during evaluation"
     )
 
     args = parser.parse_args()

@@ -88,7 +88,7 @@ CONNECTIONS: List[Tuple[int, int]] = [
 
 
 # ───────────────────────────── math helpers ────────────────────────────────
-@njit(fastmath=True, cache=True)
+@njit(fastmath=True, cache=False)
 def shortest_distance(p1: Point, p2: Point, p: Point) -> float:
     """Point‐to‐segment distance in 3-D (used by SLS loss)."""
     line_vec = (p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2])
@@ -115,7 +115,7 @@ def shortest_distance(p1: Point, p2: Point, p: Point) -> float:
     return dist
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=True, cache=False)
 def segmented_least_squares_fixed_segments(
     points: Sequence[Point], num_segments: int
 ) -> Tuple[float, np.ndarray]:

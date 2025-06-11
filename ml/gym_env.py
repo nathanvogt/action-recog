@@ -36,7 +36,6 @@ class RepDetectionEnv(gym.Env):
         self.tol = tol
         self.keypoints = keypoints
         self.sls = SlsMemoized(c=c, m=m)
-        self.start_idx = 0
         self.cur_idx = 0
         self.action_space = gym.spaces.Discrete(2)  # 0=no rep, 1=rep
         self.observation_space = gym.spaces.Box(
@@ -60,13 +59,12 @@ class RepDetectionEnv(gym.Env):
 
     def reset(self, **kwargs):
         self.sls.reset()
-        self.start_idx = self.cur_idx = 0
+        self.cur_idx = 0
         return self._get_obs(), {}
 
     def step(self, action):
         reward = self._compute_reward(action)
-        if action == 1:  # flush window on rep
-            self.start_idx = self.cur_idx
+        if action == 1:
             self.sls.reset()
         self.cur_idx += 1
         terminated = self.cur_idx >= len(self.poses)
@@ -81,8 +79,10 @@ class RepDetectionEnv(gym.Env):
         return obs, reward, terminated, truncated, {}
 
     def _compute_reward(self, action):
-        # positive if action matches presence/absence of rep boundary
-        near = min(abs(self.cur_idx - r) for r in self.rep_idx) <= self.tol
+        if len(self.rep_idx) <= 1:
+            near = False
+        else:
+            near = min(abs(self.cur_idx - r) for r in self.rep_idx[1:]) <= self.tol
         if action == 1 and near:
             return 1.0
         if action == 0 and not near:
