@@ -1,5 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
+import fs from "fs";
+import path from "path";
 import { TrainDatasetLocal } from "../libs/trainDataset/trainDataset.js";
 
 const app = express();
@@ -223,6 +225,125 @@ app.get(
   }
 );
 
+// Replay endpoints
+app.get("/api/replays", (req: Request, res: Response) => {
+  try {
+    const modelsDir = process.env.MODELS_DIR || "models";
+    const replays: Array<{
+      filename: string;
+      subject: string;
+      exercise: string;
+      path: string;
+      lastModified: Date;
+    }> = [];
+
+    // Recursively search for replay files
+    function findReplayFiles(dir: string) {
+      if (!fs.existsSync(dir)) return;
+
+      const items = fs.readdirSync(dir);
+
+      for (const item of items) {
+        const fullPath = path.join(dir, item);
+        const stat = fs.statSync(fullPath);
+
+        if (stat.isDirectory()) {
+          findReplayFiles(fullPath);
+        } else if (item.startsWith("replay_") && item.endsWith(".json")) {
+          // Parse filename: replay_{subject}_{exercise}_episodes.json
+          const match = item.match(/^replay_(.+?)_(.+?)_episodes\.json$/);
+          if (match) {
+            const [, subject, exercise] = match;
+            replays.push({
+              filename: item,
+              subject,
+              exercise,
+              path: fullPath,
+              lastModified: stat.mtime,
+            });
+          }
+        }
+      }
+    }
+
+    findReplayFiles(modelsDir);
+
+    // Group by subject and exercise
+    const grouped: Record<
+      string,
+      Record<string, Array<(typeof replays)[0]>>
+    > = {};
+    for (const replay of replays) {
+      if (!grouped[replay.subject]) {
+        grouped[replay.subject] = {};
+      }
+      if (!grouped[replay.subject][replay.exercise]) {
+        grouped[replay.subject][replay.exercise] = [];
+      }
+      grouped[replay.subject][replay.exercise].push(replay);
+    }
+
+    res.json(grouped);
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    res.status(500).json({
+      error: "Failed to list replays",
+      details: errorMessage,
+    });
+  }
+});
+
+app.get("/api/replay/:filename", (req: Request, res: Response) => {
+  try {
+    const { filename } = req.params;
+    const modelsDir = process.env.MODELS_DIR || "models";
+
+    // Find the replay file
+    function findReplayFile(
+      dir: string,
+      targetFilename: string
+    ): string | null {
+      if (!fs.existsSync(dir)) return null;
+
+      const items = fs.readdirSync(dir);
+
+      for (const item of items) {
+        const fullPath = path.join(dir, item);
+        const stat = fs.statSync(fullPath);
+
+        if (stat.isDirectory()) {
+          const found = findReplayFile(fullPath, targetFilename);
+          if (found) return found;
+        } else if (item === targetFilename) {
+          return fullPath;
+        }
+      }
+
+      return null;
+    }
+
+    const replayPath = findReplayFile(modelsDir, filename);
+
+    if (!replayPath) {
+      return res.status(404).json({
+        error: "Replay file not found",
+        filename,
+      });
+    }
+
+    const replayData = JSON.parse(fs.readFileSync(replayPath, "utf8"));
+    res.json(replayData);
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    res.status(500).json({
+      error: "Failed to load replay data",
+      details: errorMessage,
+    });
+  }
+});
+
 // Health check endpoint
 app.get("/health", (req: Request, res: Response) => {
   res.json({ status: "OK", timestamp: new Date().toISOString() });
@@ -251,6 +372,8 @@ app.listen(port, () => {
   console.log(
     "  GET /api/video-blob/:subject/:exercise/:cameraId - Get video blob"
   );
+  console.log("  GET /api/replays - List all replays");
+  console.log("  GET /api/replay/:filename - Get replay data");
   console.log("  GET /health - Health check");
 });
 

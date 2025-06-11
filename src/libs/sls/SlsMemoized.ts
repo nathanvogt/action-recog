@@ -132,8 +132,18 @@ export class SlsMemoized implements SegmentedLeastSquares {
       const curve = this.poses.map((f) => f[kp]); // whole trajectory so far
       const memo = this.memIndices[idx];
       if (curve.length <= this.c) {
-        // still warming up – nothing to do yet
-        lssCurves[idx] = curve.length ? [curve[0]] : [];
+        // warm-up phase – pad to maintain consistent shape
+        if (curve.length > 0) {
+          // Repeat the last point to reach c points
+          const padded = [
+            ...curve,
+            ...Array(this.c - curve.length).fill(curve[curve.length - 1]),
+          ];
+          lssCurves[idx] = padded;
+        } else {
+          // No points available, use zero points
+          lssCurves[idx] = Array(this.c).fill([0, 0, 0] as Point);
+        }
         continue;
       }
 

@@ -7,9 +7,13 @@ skeletons/**
 __pycache__/
 __pycache__/**
 
+models/
+models/**
+
 train/**
 test/**
 fit3d**
+
 .DS_Store
 **/.DS_Store/**
 node_modules/

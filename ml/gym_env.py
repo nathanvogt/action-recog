@@ -52,9 +52,8 @@ class RepDetectionEnv(gym.Env):
 
         out = []
         for curve in curves:
-            pts = np.array(curve[-self.sls._c :], dtype=np.float32)
-            pad = np.zeros((self.sls._c - len(pts), 3), dtype=np.float32)
-            out.append(np.concatenate([pad, pts], axis=0))
+            pts = np.array(curve, dtype=np.float32)
+            out.append(pts)
         return np.concatenate(out).ravel()
 
     def reset(self, **kwargs):

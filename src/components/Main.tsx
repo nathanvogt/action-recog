@@ -8,6 +8,8 @@ import {
 import ExerciseMenu from "./menu/ExerciseMenu";
 import ExerciseInstanceMenu from "./menu/ExerciseInstanceMenu";
 import { VisualizePose } from "./visualize/VisualizePose";
+import { ReplayMenu } from "./replay/ReplayMenu";
+import { ReplayViewer } from "./replay/ReplayViewer";
 
 const Main: React.FC = () => {
   return (
@@ -22,6 +24,8 @@ const Main: React.FC = () => {
           path="/visualize/:subject_id/:exercise_name"
           element={<VisualizePose />}
         />
+        <Route path="/replays" element={<ReplayMenu />} />
+        <Route path="/replay/:filename" element={<ReplayViewer />} />
         <Route path="/" element={<Navigate to="/menu" replace />} />
       </Routes>
     </Router>

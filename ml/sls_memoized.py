@@ -284,8 +284,16 @@ class SlsMemoized:
             curve = [frame[kp] for frame in self._poses]
             memo = self._mem_indices[idx]
 
-            if len(curve) <= self._c:  # warm-up phase – nothing to fit yet
-                lss_curves[idx] = [curve[0]] if curve else []
+            if (
+                len(curve) <= self._c
+            ):  # warm-up phase – pad to maintain consistent shape
+                if curve:
+                    # Repeat the last point to reach c points
+                    padded = curve + [curve[-1]] * (self._c - len(curve))
+                    lss_curves[idx] = padded
+                else:
+                    # No points available, use zero points
+                    lss_curves[idx] = [(0.0, 0.0, 0.0)] * self._c
                 continue
 
             seg_points, new_memo, loss = self._process_points_with_memo(curve, memo)

@@ -6,29 +6,30 @@ exercise: "band_pull_apart"
 dataset-root: "train"
 c: 16
 m: 4
-tol: 50
+tol: 25
 
 # Training parameters
-total-timesteps: 100_000
+total-timesteps: 1_000_000
 n-envs: 2
 learning-rate: 0.0003
 n-steps: 256
 batch-size: 4
 n-epochs: 4
 gamma: 0.99
-gae-lambda: 0.95
+gae-lambda: 0.98
 clip-range: 0.2
-ent-coef: 0.001
+ent-coef: 0.01
 vf-coef: 0.5
 max-grad-norm: 0.5
 
 # Model parameters
-hidden-dim: 128
-n-layers: 2
+hidden-dim: 64
+n-layers: 1
 
 # Evaluation parameters
 eval-freq: 10_000
-n-eval-episodes: 5
+n-eval-episodes: 1 # used in training mode
+n-eval-eps: 1 # used in evaluation mode
 eval-subject: "s03"
 eval-exercise: "band_pull_apart"
 
