@@ -1,0 +1,340 @@
+import os
+import argparse
+import torch
+import numpy as np
+import yaml
+from stable_baselines3 import PPO
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+import wandb
+
+from gym_env import RepDetectionEnv
+
+
+class PPOTrainer:
+    def __init__(self, config):
+        self.config = config
+        self.setup_logging()
+
+    def setup_logging(self):
+        """Initialize logging with wandb if enabled"""
+        if self.config.use_wandb:
+            wandb.init(
+                project="rep-detection-ppo",
+                config=self.config.__dict__,
+                name=f"ppo_{self.config.subject}_{self.config.exercise}",
+            )
+
+    def make_env(self, rank=0):
+        """Create and wrap environment"""
+
+        def _init():
+            env = RepDetectionEnv(
+                subject=self.config.subject,
+                exercise=self.config.exercise,
+                dataset_root=self.config.dataset_root,
+                c=self.config.c,
+                m=self.config.m,
+                tol=self.config.tol,
+            )
+            env = Monitor(env)
+            return env
+
+        return _init
+
+    def create_vec_env(self):
+        """Create vectorized environment"""
+        if self.config.n_envs == 1:
+            return DummyVecEnv([self.make_env()])
+        else:
+            return SubprocVecEnv([self.make_env(i) for i in range(self.config.n_envs)])
+
+    def create_model(self, env):
+        """Create PPO model with custom policy network"""
+
+        # PPO hyperparameters
+        model = PPO(
+            "MlpPolicy",
+            env,
+            learning_rate=self.config.learning_rate,
+            n_steps=self.config.n_steps,
+            batch_size=self.config.batch_size,
+            n_epochs=self.config.n_epochs,
+            gamma=self.config.gamma,
+            gae_lambda=self.config.gae_lambda,
+            clip_range=self.config.clip_range,
+            ent_coef=self.config.ent_coef,
+            vf_coef=self.config.vf_coef,
+            max_grad_norm=self.config.max_grad_norm,
+            policy_kwargs=dict(
+                net_arch=[self.config.hidden_dim] * self.config.n_layers,
+                activation_fn=torch.nn.ReLU,
+            ),
+            tensorboard_log=f"./tensorboard_logs/" if self.config.tensorboard else None,
+            verbose=1,
+        )
+
+        return model
+
+    def create_callbacks(self, eval_env):
+        """Create training callbacks"""
+        callbacks = []
+
+        # Evaluation callback
+        if eval_env is not None:
+            eval_callback = EvalCallback(
+                eval_env,
+                best_model_save_path=self.config.save_path,
+                log_path=self.config.save_path,
+                eval_freq=self.config.eval_freq,
+                deterministic=True,
+                render=False,
+                n_eval_episodes=self.config.n_eval_episodes,
+            )
+            callbacks.append(eval_callback)
+
+        # Checkpoint callback
+        checkpoint_callback = CheckpointCallback(
+            save_freq=self.config.checkpoint_freq,
+            save_path=os.path.join(self.config.save_path, "checkpoints"),
+            name_prefix="ppo_rep_detection",
+        )
+        callbacks.append(checkpoint_callback)
+
+        return callbacks
+
+    def train(self):
+        """Main training loop"""
+        print(f"Starting PPO training for {self.config.subject}/{self.config.exercise}")
+        print(f"Training for {self.config.total_timesteps} timesteps")
+
+        # Create environments
+        train_env = self.create_vec_env()
+
+        # Create evaluation environment if specified
+        eval_env = None
+        if self.config.eval_subject and self.config.eval_exercise:
+            eval_env = DummyVecEnv(
+                [
+                    lambda: Monitor(
+                        RepDetectionEnv(
+                            subject=self.config.eval_subject,
+                            exercise=self.config.eval_exercise,
+                            dataset_root=self.config.dataset_root,
+                            c=self.config.c,
+                            m=self.config.m,
+                            tol=self.config.tol,
+                        )
+                    )
+                ]
+            )
+
+        # Create model
+        model = self.create_model(train_env)
+
+        # Create callbacks
+        callbacks = self.create_callbacks(eval_env)
+
+        # Load existing model if specified
+        if self.config.load_path:
+            print(f"Loading model from {self.config.load_path}")
+            model = PPO.load(self.config.load_path, env=train_env)
+
+        # Train the model
+        try:
+            model.learn(
+                total_timesteps=self.config.total_timesteps,
+                callback=callbacks,
+                log_interval=self.config.log_interval,
+                tb_log_name="ppo_rep_detection",
+                reset_num_timesteps=not self.config.load_path,
+            )
+
+            # Save final model
+            final_path = os.path.join(self.config.save_path, "final_model")
+            model.save(final_path)
+            print(f"Final model saved to {final_path}")
+
+        except KeyboardInterrupt:
+            print("Training interrupted by user")
+
+        finally:
+            # Clean up
+            train_env.close()
+            if eval_env:
+                eval_env.close()
+            if self.config.use_wandb:
+                wandb.finish()
+
+    def evaluate(self, model_path, n_episodes=10):
+        """Evaluate a trained model"""
+        print(f"Evaluating model from {model_path}")
+
+        # Create environment
+        env = RepDetectionEnv(
+            subject=self.config.eval_subject or self.config.subject,
+            exercise=self.config.eval_exercise or self.config.exercise,
+            dataset_root=self.config.dataset_root,
+            c=self.config.c,
+            m=self.config.m,
+            tol=self.config.tol,
+        )
+
+        # Load model
+        model = PPO.load(model_path)
+
+        # Run evaluation episodes
+        episode_rewards = []
+        episode_lengths = []
+
+        for episode in range(n_episodes):
+            obs = env.reset()
+            done = False
+            episode_reward = 0
+            episode_length = 0
+
+            while not done:
+                action, _ = model.predict(obs, deterministic=True)
+                obs, reward, done, info = env.step(action)
+                episode_reward += reward
+                episode_length += 1
+
+            episode_rewards.append(episode_reward)
+            episode_lengths.append(episode_length)
+            print(
+                f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Length = {episode_length}"
+            )
+
+        print(f"\nEvaluation Results ({n_episodes} episodes):")
+        print(
+            f"Mean Reward: {np.mean(episode_rewards):.2f} ± {np.std(episode_rewards):.2f}"
+        )
+        print(
+            f"Mean Length: {np.mean(episode_lengths):.2f} ± {np.std(episode_lengths):.2f}"
+        )
+
+        return episode_rewards, episode_lengths
+
+
+def create_config():
+    """Create configuration with default hyperparameters"""
+    parser = argparse.ArgumentParser(description="Train PPO for rep detection")
+
+    # Environment parameters
+    parser.add_argument(
+        "--subject", type=str, required=True, help="Subject ID for training"
+    )
+    parser.add_argument(
+        "--exercise", type=str, required=True, help="Exercise type for training"
+    )
+    parser.add_argument(
+        "--dataset-root", type=str, default="train", help="Dataset root directory"
+    )
+    parser.add_argument("--c", type=int, default=10, help="SLS parameter c")
+    parser.add_argument("--m", type=int, default=5, help="SLS parameter m")
+    parser.add_argument(
+        "--tol", type=int, default=10, help="Tolerance for rep detection"
+    )
+
+    # Training parameters
+    parser.add_argument(
+        "--total-timesteps", type=int, default=100000, help="Total training timesteps"
+    )
+    parser.add_argument(
+        "--n-envs", type=int, default=1, help="Number of parallel environments"
+    )
+    parser.add_argument(
+        "--learning-rate", type=float, default=3e-4, help="Learning rate"
+    )
+    parser.add_argument(
+        "--n-steps", type=int, default=2048, help="Steps per environment per update"
+    )
+    parser.add_argument("--batch-size", type=int, default=64, help="Batch size")
+    parser.add_argument(
+        "--n-epochs", type=int, default=10, help="Number of epochs per update"
+    )
+    parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
+    parser.add_argument("--gae-lambda", type=float, default=0.95, help="GAE lambda")
+    parser.add_argument("--clip-range", type=float, default=0.2, help="PPO clip range")
+    parser.add_argument(
+        "--ent-coef", type=float, default=0.01, help="Entropy coefficient"
+    )
+    parser.add_argument(
+        "--vf-coef", type=float, default=0.5, help="Value function coefficient"
+    )
+    parser.add_argument(
+        "--max-grad-norm", type=float, default=0.5, help="Max gradient norm"
+    )
+
+    # Model parameters
+    parser.add_argument(
+        "--hidden-dim", type=int, default=128, help="Hidden layer dimension"
+    )
+    parser.add_argument(
+        "--n-layers", type=int, default=2, help="Number of hidden layers"
+    )
+
+    # Evaluation parameters
+    parser.add_argument("--eval-subject", type=str, help="Subject ID for evaluation")
+    parser.add_argument(
+        "--eval-exercise", type=str, help="Exercise type for evaluation"
+    )
+    parser.add_argument(
+        "--eval-freq", type=int, default=10000, help="Evaluation frequency"
+    )
+    parser.add_argument(
+        "--n-eval-episodes", type=int, default=5, help="Number of evaluation episodes"
+    )
+
+    # Saving and logging
+    parser.add_argument(
+        "--save-path", type=str, default="./models", help="Path to save models"
+    )
+    parser.add_argument("--load-path", type=str, help="Path to load existing model")
+    parser.add_argument(
+        "--checkpoint-freq", type=int, default=50000, help="Checkpoint frequency"
+    )
+    parser.add_argument("--log-interval", type=int, default=10, help="Log interval")
+    parser.add_argument(
+        "--use-wandb", action="store_true", help="Use Weights & Biases logging"
+    )
+    parser.add_argument(
+        "--tensorboard", action="store_true", help="Use TensorBoard logging"
+    )
+
+    # Mode
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["train", "eval"],
+        default="train",
+        help="Mode: train or eval",
+    )
+    parser.add_argument("--model-path", type=str, help="Path to model for evaluation")
+    parser.add_argument(
+        "--n-eval-eps", type=int, default=10, help="Number of episodes for evaluation"
+    )
+
+    return parser.parse_args()
+
+
+def main():
+    config = create_config()
+
+    # Create save directory
+    os.makedirs(config.save_path, exist_ok=True)
+
+    trainer = PPOTrainer(config)
+
+    if config.mode == "train":
+        trainer.train()
+    elif config.mode == "eval":
+        if not config.model_path:
+            raise ValueError("Model path required for evaluation mode")
+        trainer.evaluate(config.model_path, config.n_eval_eps)
+
+
+if __name__ == "__main__":
+    main()

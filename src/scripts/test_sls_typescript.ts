@@ -21,8 +21,8 @@ const DEFAULT_KEYPOINTS = [
 function testSlsTypeScript(
   subject: string,
   exercise: string,
-  c: number = 9,
-  m: number = 4,
+  c: number = 32,
+  m: number = 8,
   maxFrames: number = 100
 ) {
   // Load dataset

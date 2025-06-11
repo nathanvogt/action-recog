@@ -191,6 +191,7 @@ class SlsMemoized:
 
         self._frame_count: int = 0  # == len(self._poses)
         self._poses: List[List[Point]] = []  # global frame buffer
+        self.sls_curves = []
         self._mem_indices: List[List[int]] = []  # per-kp memo index lists
         self._kp_list: List[int] = []  # active keypoints
 
@@ -292,6 +293,8 @@ class SlsMemoized:
             lss_curves[idx] = seg_points
             total_loss += loss
 
+        self.sls_curves = lss_curves
+
         return lss_curves, total_loss
 
     # ─────────────── housekeeping / introspection ───────────────
@@ -301,6 +304,7 @@ class SlsMemoized:
         self._poses.clear()
         self._mem_indices.clear()
         self._kp_list.clear()
+        self.sls_curves.clear()
 
     def get_memo_state(self) -> Dict[str, object]:
         """Return *copies* of internal mutable state for debugging."""
