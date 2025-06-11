@@ -77,6 +77,25 @@ class PPOTrainer:
             verbose=1,
         )
 
+        # Optionally initialize from a supervised learning checkpoint
+        if getattr(self.config, "supervised_path", None):
+            chk = self.config.supervised_path
+            if os.path.exists(chk):
+                try:
+                    state_dict = torch.load(chk, map_location="cpu")
+                    policy_state = model.policy.state_dict()
+                    for (p_name, p_tensor), (_, s_tensor) in zip(
+                        policy_state.items(), state_dict.items()
+                    ):
+                        if p_tensor.shape == s_tensor.shape:
+                            policy_state[p_name] = s_tensor
+                    model.policy.load_state_dict(policy_state, strict=False)
+                    print(f"Loaded supervised weights from {chk}")
+                except Exception as e:
+                    print(f"Failed to load supervised weights: {e}")
+            else:
+                print(f"Supervised checkpoint not found: {chk}")
+
         return model
 
     def create_callbacks(self, eval_env):
@@ -375,6 +394,11 @@ def create_config():
         "--save-path", type=str, default="./models", help="Path to save models"
     )
     parser.add_argument("--load-path", type=str, help="Path to load existing model")
+    parser.add_argument(
+        "--supervised-path",
+        type=str,
+        help="Load initial weights from supervised training",
+    )
     parser.add_argument(
         "--checkpoint-freq", type=int, default=50000, help="Checkpoint frequency"
     )
