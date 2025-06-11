@@ -90,7 +90,7 @@ class PPOTrainer:
                 best_model_save_path=self.config.save_path,
                 log_path=self.config.save_path,
                 eval_freq=self.config.eval_freq,
-                deterministic=True,
+                deterministic=getattr(self.config, "eval_deterministic", False),
                 render=False,
                 n_eval_episodes=self.config.n_eval_episodes,
             )
@@ -216,7 +216,9 @@ class PPOTrainer:
                 }
 
             while not done:
-                action, _ = model.predict(obs, deterministic=True)
+                action, _ = model.predict(
+                    obs, deterministic=getattr(self.config, "eval_deterministic", False)
+                )
                 new_obs, reward, terminated, truncated, info = env.step(action)
                 done = terminated or truncated
                 episode_reward += reward
@@ -398,6 +400,11 @@ def create_config():
     )
     parser.add_argument(
         "--save-replay", action="store_true", help="Save replay data during evaluation"
+    )
+    parser.add_argument(
+        "--eval-deterministic",
+        action="store_true",
+        help="Use deterministic policy during evaluation",
     )
 
     args = parser.parse_args()

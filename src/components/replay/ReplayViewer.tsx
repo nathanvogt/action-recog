@@ -221,7 +221,7 @@ export const ReplayViewer: React.FC = () => {
         }
         return prev + 1;
       });
-    }, 200); // 5 FPS for replay
+    }, 33); // 30 FPS for replay
 
     return () => clearInterval(interval);
   }, [isPlaying, replayData, currentEpisode]);

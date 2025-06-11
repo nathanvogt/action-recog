@@ -2,40 +2,42 @@
 
 # Environment parameters
 subject: "s03"
-exercise: "band_pull_apart"
+exercise: "dumbbell_biceps_curls"
 dataset-root: "train"
-c: 16
+c: 24
 m: 4
-tol: 25
+tol: 20
 
 # Training parameters
-total-timesteps: 1_000_000
+total-timesteps: 50_000
 n-envs: 2
 learning-rate: 0.0003
 n-steps: 256
-batch-size: 4
-n-epochs: 4
+batch-size: 16
+n-epochs: 2
 gamma: 0.99
 gae-lambda: 0.98
-clip-range: 0.2
+clip-range: 0.5
 ent-coef: 0.01
-vf-coef: 0.5
+vf-coef: 0.75
 max-grad-norm: 0.5
 
 # Model parameters
-hidden-dim: 64
-n-layers: 1
+hidden-dim: 32
+n-layers: 2
 
 # Evaluation parameters
 eval-freq: 10_000
-n-eval-episodes: 1 # used in training mode
-n-eval-eps: 1 # used in evaluation mode
+n-eval-episodes: 4 # used in training mode
+n-eval-eps: 2 # used in evaluation mode
 eval-subject: "s03"
-eval-exercise: "band_pull_apart"
+eval-exercise: "dumbbell_biceps_curls"
+eval-deterministic: false
 
 # Saving and logging
-save-path: "./models/basic_training"
-# checkpoint-freq: 50000
+# load-path: "./models/basic_training/final_model.zip"
+save-path: "./models/basic_training/fine_tuned"
+# checkpoint-freq: 100_000
 log-interval: 10
 use-wandb: false
 tensorboard: false

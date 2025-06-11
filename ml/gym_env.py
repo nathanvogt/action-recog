@@ -37,6 +37,9 @@ class RepDetectionEnv(gym.Env):
         self.keypoints = keypoints
         self.sls = SlsMemoized(c=c, m=m)
         self.cur_idx = 0
+        self.used_rep_boundaries = (
+            set()
+        )  # Track which rep boundaries have been correctly identified
         self.action_space = gym.spaces.Discrete(2)  # 0=no rep, 1=rep
         self.observation_space = gym.spaces.Box(
             low=-np.inf,
@@ -59,6 +62,7 @@ class RepDetectionEnv(gym.Env):
     def reset(self, **kwargs):
         self.sls.reset()
         self.cur_idx = 0
+        self.used_rep_boundaries = set()
         return self._get_obs(), {}
 
     def step(self, action):
@@ -79,11 +83,38 @@ class RepDetectionEnv(gym.Env):
 
     def _compute_reward(self, action):
         if len(self.rep_idx) <= 1:
+            near_boundary_idx = None
             near = False
         else:
-            near = min(abs(self.cur_idx - r) for r in self.rep_idx[1:]) <= self.tol
+            # Find the closest rep boundary and its index
+            distances = [
+                (abs(self.cur_idx - r), i) for i, r in enumerate(self.rep_idx[1:])
+            ]
+            min_distance, closest_boundary_idx = min(distances)
+            near = min_distance <= self.tol
+            # Adjust index to account for skipping first boundary
+            near_boundary_idx = closest_boundary_idx + 1 if near else None
+
         if action == 1 and near:
-            return 1.0
-        if action == 0 and not near:
-            return 0.1
-        return -1.0
+            # Predicting a rep near a boundary
+            if near_boundary_idx in self.used_rep_boundaries:
+                # This boundary was already correctly identified - penalize
+                return -1.0
+            else:
+                # New boundary correctly identified - reward and mark as used
+                self.used_rep_boundaries.add(near_boundary_idx)
+                return 10.0
+        elif action == 0 and not near:
+            # Correctly predicting no rep when not near a boundary
+            return 0.05
+        elif action == 0 and near:
+            # Predicting no rep when near a boundary
+            if near_boundary_idx in self.used_rep_boundaries:
+                # Near an already-used boundary - neutral
+                return 0.0
+            else:
+                # Near an unused boundary - false negative, penalize
+                return -1.0
+        else:
+            # Action == 1 and not near - false positive
+            return -4.0
