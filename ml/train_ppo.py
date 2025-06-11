@@ -218,17 +218,23 @@ class PPOTrainer:
         return episode_rewards, episode_lengths
 
 
+def load_config_from_yaml(yaml_path):
+    """Load configuration from YAML file"""
+    with open(yaml_path, "r") as f:
+        config = yaml.safe_load(f)
+    return config
+
+
 def create_config():
     """Create configuration with default hyperparameters"""
     parser = argparse.ArgumentParser(description="Train PPO for rep detection")
 
+    # Configuration file
+    parser.add_argument("--config", type=str, help="Path to YAML configuration file")
+
     # Environment parameters
-    parser.add_argument(
-        "--subject", type=str, required=True, help="Subject ID for training"
-    )
-    parser.add_argument(
-        "--exercise", type=str, required=True, help="Exercise type for training"
-    )
+    parser.add_argument("--subject", type=str, help="Subject ID for training")
+    parser.add_argument("--exercise", type=str, help="Exercise type for training")
     parser.add_argument(
         "--dataset-root", type=str, default="train", help="Dataset root directory"
     )
@@ -317,7 +323,30 @@ def create_config():
         "--n-eval-eps", type=int, default=10, help="Number of episodes for evaluation"
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # Load YAML config if provided
+    if args.config:
+        yaml_config = load_config_from_yaml(args.config)
+
+        # Override defaults with YAML values (only if not provided via command line)
+        for key, value in yaml_config.items():
+            key_with_underscores = key.replace("-", "_")
+            if hasattr(args, key_with_underscores):
+                # Check if the argument was provided via command line by comparing to default
+                default_value = parser.get_default(key_with_underscores)
+                current_value = getattr(args, key_with_underscores)
+                # If current value is same as default, use YAML value
+                if current_value == default_value:
+                    setattr(args, key_with_underscores, value)
+
+    # Validate required arguments
+    if not args.subject:
+        raise ValueError("Subject is required (via --subject or config file)")
+    if not args.exercise:
+        raise ValueError("Exercise is required (via --exercise or config file)")
+
+    return args
 
 
 def main():

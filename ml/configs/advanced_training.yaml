@@ -1,0 +1,40 @@
+# Advanced PPO Training Configuration for Rep Detection
+
+# Environment parameters
+subject: "s03"
+exercise: "band_pull_apart"
+dataset-root: "train"
+c: 15
+m: 8
+tol: 8
+
+# Training parameters
+total-timesteps: 500000
+n-envs: 4
+learning-rate: 0.0001
+n-steps: 1024
+batch-size: 128
+n-epochs: 15
+gamma: 0.995
+gae-lambda: 0.98
+clip-range: 0.15
+ent-coef: 0.005
+vf-coef: 0.3
+max-grad-norm: 0.3
+
+# Model parameters
+hidden-dim: 256
+n-layers: 3
+
+# Evaluation parameters
+eval-subject: "s04"
+eval-exercise: "band_pull_apart"
+eval-freq: 5000
+n-eval-episodes: 10
+
+# Saving and logging
+save-path: "./models/advanced_training"
+checkpoint-freq: 25000
+log-interval: 5
+use-wandb: true
+tensorboard: true
