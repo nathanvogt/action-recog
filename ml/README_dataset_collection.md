@@ -44,6 +44,10 @@ m: 4
 tol: 20
 n-samples: 5000 # More samples for better dataset
 save-path: "./datasets/S03_dumbbell_biceps_curls"
+
+# Parallel processing (optional)
+parallel: true
+n-cores: 4 # Use 4 cores, or omit to use all available
 ```
 
 ### What Gets Saved
@@ -89,6 +93,59 @@ n-layers: 3
 save-path: "./models/supervised_preloaded"
 ```
 
+## Parallel Processing
+
+The data collection process can be significantly accelerated using parallel processing:
+
+### Enabling Parallel Processing
+
+Add these parameters to your YAML config:
+
+```yaml
+parallel: true
+n-cores: 4 # Number of CPU cores to use
+```
+
+Or use command line arguments:
+
+```bash
+python collect_dataset.py \
+    --config configs/data_collection.yaml \
+    --parallel \
+    --n-cores 8
+```
+
+### Performance Benefits
+
+- **Sequential**: Processes sequences one by one
+- **Parallel**: Distributes work across multiple CPU cores
+- **Speed-up**: Typically 2-8x faster depending on your CPU
+
+### Automatic Core Detection
+
+If you don't specify `n-cores`, the script will automatically use all available CPU cores:
+
+```yaml
+parallel: true # Uses all available cores
+```
+
+### Example Configurations
+
+For small datasets (development/testing):
+
+```yaml
+n-samples: 1000
+parallel: false # Sequential is fine for small datasets
+```
+
+For large datasets (production):
+
+```yaml
+n-samples: 10000
+parallel: true
+n-cores: 8 # Use 8 cores for faster processing
+```
+
 ## Testing Dataset Loading
 
 You can test that a dataset loads correctly:
@@ -100,8 +157,8 @@ python collect_dataset.py --load-test ./datasets/S03_dumbbell_biceps_curls
 ## Example Complete Workflow
 
 ```bash
-# 1. Collect dataset (this is the slow step)
-python collect_dataset.py --config configs/data_collection.yaml
+# 1. Collect dataset with parallel processing (much faster!)
+python collect_dataset.py --config configs/data_collection_parallel.yaml
 
 # 2. Train model (fast, can be repeated with different parameters)
 python train_supervised.py --config configs/supervised_training_preloaded.yaml

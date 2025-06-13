@@ -7,3 +7,7 @@ tol: 20
 
 n-samples: 100
 save-path: "./datasets/S03_dumbbell_biceps_curls"
+
+# Parallel processing (optional)
+parallel: true
+# n-cores: 4

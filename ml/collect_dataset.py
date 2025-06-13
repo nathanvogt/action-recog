@@ -3,6 +3,8 @@ import os
 import pickle
 from typing import Sequence, List, Tuple
 import yaml
+import multiprocessing as mp
+from functools import partial
 
 import numpy as np
 from tqdm import tqdm
@@ -20,6 +22,48 @@ from sls_memoized import (
 )
 
 
+def _worker_process_sequences(
+    sequence_data: List[Tuple[int, int, int]],
+    poses: np.ndarray,
+    keypoints: List[int],
+    c: int,
+    m: int,
+) -> Tuple[List[np.ndarray], List[int]]:
+    """Worker function to process a batch of sequences in parallel."""
+    # Create a fresh SLS instance for this worker
+    sls = SlsMemoized(c=c, m=m)
+
+    def frame_to_obs() -> np.ndarray:
+        curves = sls.sls_curves
+        if not curves:
+            return np.zeros(len(keypoints) * c * 3, dtype=np.float32)
+        obs = np.concatenate(
+            [np.array(curve, dtype=np.float32) for curve in curves]
+        ).ravel()
+        return obs
+
+    def process_sequence(start: int, end: int) -> np.ndarray:
+        sls.reset()
+        if start <= end:
+            rng = range(start, end + 1)
+        else:
+            rng = range(start, end - 1, -1)
+        sls.reset()
+        for i in rng:
+            sls.process_poses([poses[i]], keypoints)
+        return frame_to_obs()
+
+    features = []
+    labels = []
+
+    for start, end, label in sequence_data:
+        feat = process_sequence(start, end)
+        features.append(feat)
+        labels.append(label)
+
+    return features, labels
+
+
 class RepSequenceCollector:
     """Collects and processes pose sequences as positive/negative rep examples."""
 
@@ -33,6 +77,8 @@ class RepSequenceCollector:
         tol: int = 10,
         n_samples: int = 1000,
         keypoints: Sequence[int] | None = None,
+        parallel: bool = False,
+        n_cores: int = None,
     ) -> None:
         self.dataset = TrainDatasetLocal(dataset_root)
         self.subject = subject
@@ -47,8 +93,11 @@ class RepSequenceCollector:
             + BACK
         )
         self.c = c
+        self.m = m
         self.tol = tol
         self.n_samples = n_samples
+        self.parallel = parallel
+        self.n_cores = n_cores if n_cores is not None else mp.cpu_count()
         self.sls = SlsMemoized(c=c, m=m)
 
         self.poses = self.dataset.get_pose_array(subject, exercise)
@@ -62,6 +111,9 @@ class RepSequenceCollector:
         print(f"  Keypoints: {len(self.keypoints)}")
         print(f"  SLS parameters: c={c}, m={m}")
         print(f"  Tolerance: {tol}")
+        print(f"  Parallel processing: {'enabled' if parallel else 'disabled'}")
+        if parallel:
+            print(f"  Number of cores: {self.n_cores}")
         print("-" * 60)
 
     def _frame_to_obs(self) -> np.ndarray:
@@ -137,11 +189,18 @@ class RepSequenceCollector:
 
     def collect_dataset(self) -> tuple[np.ndarray, np.ndarray]:
         """Collect and return features and labels."""
+        if self.parallel:
+            return self._collect_dataset_parallel()
+        else:
+            return self._collect_dataset_sequential()
+
+    def _collect_dataset_sequential(self) -> tuple[np.ndarray, np.ndarray]:
+        """Sequential data collection (original implementation)."""
         feats: List[np.ndarray] = []
         labs: List[int] = []
 
         print(
-            f"Sampling {self.n_samples} sequences for {self.subject}/{self.exercise}..."
+            f"Sampling {self.n_samples} sequences for {self.subject}/{self.exercise} (sequential)..."
         )
         positive_count = 0
         negative_count = 0
@@ -175,6 +234,82 @@ class RepSequenceCollector:
         print("-" * 60)
 
         return np.stack(feats), np.array(labs, dtype=np.float32)
+
+    def _collect_dataset_parallel(self) -> tuple[np.ndarray, np.ndarray]:
+        """Parallel data collection using multiprocessing."""
+        print(
+            f"Sampling {self.n_samples} sequences for {self.subject}/{self.exercise} (parallel with {self.n_cores} cores)..."
+        )
+
+        # Pre-generate all sequence indices and labels
+        sequence_specs = []
+        positive_count = 0
+        negative_count = 0
+
+        print("Generating sequence specifications...")
+        for i in tqdm(range(self.n_samples), desc="Generating specs", unit="spec"):
+            if np.random.rand() < 0.5:
+                idx1, idx2 = self._sample_positive_indices()
+                label = 1
+                positive_count += 1
+            else:
+                idx1, idx2 = self._sample_negative_indices()
+                label = 0
+                negative_count += 1
+            start, end = sorted((idx1, idx2))
+            sequence_specs.append((start, end, label))
+
+        print(f"Generated {len(sequence_specs)} sequence specifications")
+        print(f"  Positive samples: {positive_count}")
+        print(f"  Negative samples: {negative_count}")
+
+        # Split work into chunks for parallel processing
+        chunk_size = max(1, self.n_samples // self.n_cores)
+        chunks = [
+            sequence_specs[i : i + chunk_size]
+            for i in range(0, len(sequence_specs), chunk_size)
+        ]
+
+        print(f"Split work into {len(chunks)} chunks (chunk size: ~{chunk_size})")
+
+        # Create partial function with fixed parameters
+        worker_func = partial(
+            _worker_process_sequences,
+            poses=self.poses,
+            keypoints=self.keypoints,
+            c=self.c,
+            m=self.m,
+        )
+
+        # Process chunks in parallel
+        print("Processing sequences in parallel...")
+        all_features = []
+        all_labels = []
+
+        with mp.Pool(processes=self.n_cores) as pool:
+            # Use imap for progress tracking
+            results = list(
+                tqdm(
+                    pool.imap(worker_func, chunks),
+                    total=len(chunks),
+                    desc="Processing chunks",
+                    unit="chunk",
+                )
+            )
+
+        # Combine results from all workers
+        for chunk_features, chunk_labels in results:
+            all_features.extend(chunk_features)
+            all_labels.extend(chunk_labels)
+
+        print(f"Data collection complete!")
+        print(f"  Total samples: {len(all_labels)}")
+        print(f"  Positive samples: {sum(all_labels)}")
+        print(f"  Negative samples: {len(all_labels) - sum(all_labels)}")
+        print(f"  Feature dimension: {len(all_features[0]) if all_features else 0}")
+        print("-" * 60)
+
+        return np.stack(all_features), np.array(all_labels, dtype=np.float32)
 
 
 def save_dataset(
@@ -239,6 +374,16 @@ def main():
         "--n-samples", type=int, default=1000, help="Number of sequences to sample"
     )
 
+    # Parallel processing parameters
+    parser.add_argument(
+        "--parallel", action="store_true", help="Enable parallel processing"
+    )
+    parser.add_argument(
+        "--n-cores",
+        type=int,
+        help="Number of CPU cores to use (default: all available)",
+    )
+
     # Output
     parser.add_argument(
         "--save-path", type=str, help="Path to save the collected dataset"
@@ -300,6 +445,8 @@ def main():
         m=args.m,
         tol=args.tol,
         n_samples=args.n_samples,
+        parallel=args.parallel,
+        n_cores=args.n_cores,
     )
 
     features, labels = collector.collect_dataset()
