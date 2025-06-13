@@ -72,6 +72,7 @@ class PPOTrainer:
             policy_kwargs=dict(
                 net_arch=[self.config.hidden_dim] * self.config.n_layers,
                 activation_fn=torch.nn.ReLU,
+                # share_features_extractor=False,
             ),
             tensorboard_log=f"./tensorboard_logs/" if self.config.tensorboard else None,
             verbose=1,
@@ -85,92 +86,95 @@ class PPOTrainer:
                     supervised_state_dict = torch.load(chk, map_location="cpu")
                     policy_state_dict = model.policy.state_dict()
 
-                    print("Supervised checkpoint state_dict keys and shapes:")
-                    for k, v in supervised_state_dict.items():
-                        print(f"  {k}: {v.shape}")
-                    print("\nPPO policy state_dict keys and shapes:")
-                    for k, v in policy_state_dict.items():
-                        print(f"  {k}: {v.shape}")
-
                     # Track loading progress
                     loaded_params = []
-                    skipped_params = []
-                    missing_params = []
+                    failed_loads = []
 
-                    # Try to load matching parameters by name
+                    # Create mapping from supervised parameter names to PPO parameter names
+                    param_mapping = {}
+
+                    # Map supervised parameters to PPO policy parameters
+                    for sup_name in supervised_state_dict.keys():
+                        if sup_name.startswith(
+                            "mlp_extractor.policy_net."
+                        ) or sup_name.startswith("action_net."):
+                            # Already in correct format (from PPOCompatiblePolicy)
+                            param_mapping[sup_name] = sup_name
+                        elif sup_name.startswith("net."):
+                            # Map old format to new format
+                            if sup_name.endswith(".weight") or sup_name.endswith(
+                                ".bias"
+                            ):
+                                # Extract layer info
+                                parts = sup_name.split(".")
+                                layer_num = parts[1]
+                                param_type = parts[2]  # 'weight' or 'bias'
+
+                                # Determine if this is the output layer
+                                supervised_layer_nums = set()
+                                for name in supervised_state_dict.keys():
+                                    if name.startswith("net.") and "." in name[4:]:
+                                        supervised_layer_nums.add(
+                                            int(name.split(".")[1])
+                                        )
+
+                                max_layer = (
+                                    max(supervised_layer_nums)
+                                    if supervised_layer_nums
+                                    else 0
+                                )
+
+                                if int(layer_num) == max_layer:
+                                    # This is the output layer -> map to action_net
+                                    ppo_name = f"action_net.{param_type}"
+                                else:
+                                    # This is a hidden layer -> map to policy_net
+                                    ppo_name = f"mlp_extractor.policy_net.{layer_num}.{param_type}"
+
+                                param_mapping[sup_name] = ppo_name
+
+                    # Try to load mapped parameters
                     for sup_name, sup_tensor in supervised_state_dict.items():
-                        if sup_name in policy_state_dict:
-                            policy_tensor = policy_state_dict[sup_name]
-                            if sup_tensor.shape == policy_tensor.shape:
-                                policy_state_dict[sup_name] = sup_tensor
-                                loaded_params.append((sup_name, sup_tensor.shape))
-                                print(
-                                    f"✓ Loaded {sup_name} with shape {sup_tensor.shape}"
-                                )
+                        if sup_name in param_mapping:
+                            ppo_name = param_mapping[sup_name]
+                            if ppo_name in policy_state_dict:
+                                policy_tensor = policy_state_dict[ppo_name]
+                                if sup_tensor.shape == policy_tensor.shape:
+                                    policy_state_dict[ppo_name] = sup_tensor
+                                    loaded_params.append(sup_name)
+                                else:
+                                    failed_loads.append(
+                                        f"{sup_name}: shape mismatch {sup_tensor.shape} != {policy_tensor.shape}"
+                                    )
                             else:
-                                skipped_params.append(
-                                    (sup_name, sup_tensor.shape, policy_tensor.shape)
-                                )
-                                print(
-                                    f"✗ Skipped {sup_name}: supervised shape {sup_tensor.shape} != policy shape {policy_tensor.shape}"
+                                failed_loads.append(
+                                    f"{sup_name}: missing target {ppo_name}"
                                 )
                         else:
-                            missing_params.append((sup_name, sup_tensor.shape))
-                            print(f"✗ Missing {sup_name} in policy network")
-
-                    # Check for policy parameters that weren't loaded
-                    unloaded_policy_params = []
-                    for pol_name, pol_tensor in policy_state_dict.items():
-                        if pol_name not in [name for name, _ in loaded_params]:
-                            unloaded_policy_params.append((pol_name, pol_tensor.shape))
+                            failed_loads.append(f"{sup_name}: no mapping found")
 
                     # Load the updated state dict
                     model.policy.load_state_dict(policy_state_dict, strict=False)
 
-                    # Print summary
-                    print(f"\n=== SUPERVISED LOADING SUMMARY ===")
-                    print(f"✓ Successfully loaded: {len(loaded_params)} parameters")
-                    print(
-                        f"✗ Skipped (shape mismatch): {len(skipped_params)} parameters"
-                    )
-                    print(f"✗ Missing in policy: {len(missing_params)} parameters")
-                    print(
-                        f"✗ Policy params not loaded: {len(unloaded_policy_params)} parameters"
-                    )
-
-                    if unloaded_policy_params:
-                        print(
-                            f"\nPolicy parameters that were NOT loaded from supervised checkpoint:"
-                        )
-                        for name, shape in unloaded_policy_params:
-                            print(f"  {name}: {shape}")
-
-                    # Validate that critical components were loaded
-                    critical_loaded = len(loaded_params) > 0
-                    if not critical_loaded:
+                    # Validate loading success
+                    if len(loaded_params) == 0:
                         raise ValueError(
-                            f"CRITICAL ERROR: No parameters were loaded from supervised checkpoint! "
-                            f"This suggests the supervised and policy networks have incompatible architectures. "
-                            f"Supervised params: {list(supervised_state_dict.keys())}, "
-                            f"Policy params: {list(policy_state_dict.keys())}"
+                            f"FAILED to load supervised weights: No parameters were loaded! "
+                            f"Errors: {failed_loads[:3]}{'...' if len(failed_loads) > 3 else ''}"
                         )
 
-                    # Warn if less than 50% of supervised parameters were loaded
-                    loading_ratio = len(loaded_params) / len(supervised_state_dict)
-                    if loading_ratio < 0.5:
-                        warning_msg = f"\n⚠️  WARNING: Only {loading_ratio:.1%} of supervised parameters were loaded!"
-                        detail_msg = f"This may indicate architectural differences between the supervised and policy networks."
-                        print(warning_msg)
-                        print(detail_msg)
-
-                        if getattr(self.config, "strict_supervised_loading", False):
+                    if len(failed_loads) > 0:
+                        loading_ratio = len(loaded_params) / len(supervised_state_dict)
+                        if loading_ratio < 0.5 and getattr(
+                            self.config, "strict_supervised_loading", False
+                        ):
                             raise ValueError(
-                                f"STRICT LOADING ERROR: {warning_msg.strip()} {detail_msg} "
-                                f"Use --strict-supervised-loading=false to allow partial loading."
+                                f"FAILED to load supervised weights: Only {loading_ratio:.1%} of parameters loaded. "
+                                f"Errors: {failed_loads[:3]}{'...' if len(failed_loads) > 3 else ''}"
                             )
 
                     print(
-                        f"\n✓ Successfully loaded {len(loaded_params)}/{len(supervised_state_dict)} parameters from {chk}"
+                        f"✓ Successfully loaded {len(loaded_params)}/{len(supervised_state_dict)} supervised parameters"
                     )
 
                 except Exception as e:

@@ -20,7 +20,7 @@ from sls_memoized import (
     RIGHT_ARM_NO_HAND,
     BACK,
 )
-from model import RepPolicy
+from model import RepPolicy, PPOCompatiblePolicy
 
 
 class RepSequenceDataset(Dataset):
@@ -152,10 +152,9 @@ class RepSequenceDataset(Dataset):
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:  # type: ignore[override]
         x = torch.from_numpy(self.features[idx])
-        # Convert to one-hot encoding: [1, 0] for class 0, [0, 1] for class 1
-        y_onehot = torch.zeros(2)
-        y_onehot[int(self.labels[idx])] = 1.0
-        return x, y_onehot
+        # Return class index for CrossEntropyLoss
+        y = torch.tensor(int(self.labels[idx]), dtype=torch.long)
+        return x, y
 
 
 def load_config_from_yaml(yaml_path):
@@ -181,11 +180,14 @@ def train_supervised(args: argparse.Namespace) -> None:
 
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 
-    model = RepPolicy(
-        dataset.features.shape[1], hidden=args.hidden_dim, n_layers=args.n_layers
+    model = PPOCompatiblePolicy(
+        dataset.features.shape[1],
+        hidden=args.hidden_dim,
+        n_layers=args.n_layers,
+        n_actions=2,
     )
-    # Use MSELoss for one-hot encoded targets (alternative: CrossEntropyLoss with class indices)
-    criterion = nn.MSELoss()
+    # Use CrossEntropyLoss for classification with class indices
+    criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
     print(
@@ -207,7 +209,7 @@ def train_supervised(args: argparse.Namespace) -> None:
 
         for batch_idx, (X, y) in enumerate(loader):
             optimizer.zero_grad()
-            pred = model(X)  # Shape: (batch_size, 2)
+            pred = model.get_action_logits(X)  # Shape: (batch_size, 2) - raw logits
             loss = criterion(pred, y)
             loss.backward()
             optimizer.step()
@@ -218,8 +220,7 @@ def train_supervised(args: argparse.Namespace) -> None:
 
             # Calculate accuracy - compare predicted class with true class
             pred_class = torch.argmax(pred, dim=1)  # Get predicted class (0 or 1)
-            true_class = torch.argmax(y, dim=1)  # Get true class from one-hot
-            correct_predictions += (pred_class == true_class).sum().item()
+            correct_predictions += (pred_class == y).sum().item()
             total_predictions += y.size(0)
 
             # Print progress every 10 batches or at the end
