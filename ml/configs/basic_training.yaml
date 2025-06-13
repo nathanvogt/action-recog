@@ -9,7 +9,7 @@ m: 4
 tol: 20
 
 # Training parameters
-total-timesteps: 50_000
+total-timesteps: 10_000
 n-envs: 2
 learning-rate: 0.0003
 n-steps: 256
@@ -35,6 +35,8 @@ eval-exercise: "dumbbell_biceps_curls"
 eval-deterministic: false
 
 # Saving and logging
+supervised-path: "./models/supervised/rep_classifier.pt"
+strict-supervised-loading: true # Fail if supervised loading doesn't work well
 # load-path: "./models/basic_training/final_model.zip"
 save-path: "./models/basic_training/fine_tuned"
 # checkpoint-freq: 100_000

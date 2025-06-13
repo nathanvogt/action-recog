@@ -1,0 +1,15 @@
+subject: "S03"
+exercise: "dumbbell_biceps_curls"
+dataset-root: "train"
+c: 24
+m: 4
+tol: 20
+
+n-samples: 4
+epochs: 1
+batch-size: 2
+learning-rate: 0.001
+
+hidden-dim: 32
+n-layers: 2
+save-path: "./models/supervised"

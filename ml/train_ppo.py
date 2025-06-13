@@ -82,19 +82,102 @@ class PPOTrainer:
             chk = self.config.supervised_path
             if os.path.exists(chk):
                 try:
-                    state_dict = torch.load(chk, map_location="cpu")
-                    policy_state = model.policy.state_dict()
-                    for (p_name, p_tensor), (_, s_tensor) in zip(
-                        policy_state.items(), state_dict.items()
-                    ):
-                        if p_tensor.shape == s_tensor.shape:
-                            policy_state[p_name] = s_tensor
-                    model.policy.load_state_dict(policy_state, strict=False)
-                    print(f"Loaded supervised weights from {chk}")
+                    supervised_state_dict = torch.load(chk, map_location="cpu")
+                    policy_state_dict = model.policy.state_dict()
+
+                    print("Supervised checkpoint state_dict keys and shapes:")
+                    for k, v in supervised_state_dict.items():
+                        print(f"  {k}: {v.shape}")
+                    print("\nPPO policy state_dict keys and shapes:")
+                    for k, v in policy_state_dict.items():
+                        print(f"  {k}: {v.shape}")
+
+                    # Track loading progress
+                    loaded_params = []
+                    skipped_params = []
+                    missing_params = []
+
+                    # Try to load matching parameters by name
+                    for sup_name, sup_tensor in supervised_state_dict.items():
+                        if sup_name in policy_state_dict:
+                            policy_tensor = policy_state_dict[sup_name]
+                            if sup_tensor.shape == policy_tensor.shape:
+                                policy_state_dict[sup_name] = sup_tensor
+                                loaded_params.append((sup_name, sup_tensor.shape))
+                                print(
+                                    f"✓ Loaded {sup_name} with shape {sup_tensor.shape}"
+                                )
+                            else:
+                                skipped_params.append(
+                                    (sup_name, sup_tensor.shape, policy_tensor.shape)
+                                )
+                                print(
+                                    f"✗ Skipped {sup_name}: supervised shape {sup_tensor.shape} != policy shape {policy_tensor.shape}"
+                                )
+                        else:
+                            missing_params.append((sup_name, sup_tensor.shape))
+                            print(f"✗ Missing {sup_name} in policy network")
+
+                    # Check for policy parameters that weren't loaded
+                    unloaded_policy_params = []
+                    for pol_name, pol_tensor in policy_state_dict.items():
+                        if pol_name not in [name for name, _ in loaded_params]:
+                            unloaded_policy_params.append((pol_name, pol_tensor.shape))
+
+                    # Load the updated state dict
+                    model.policy.load_state_dict(policy_state_dict, strict=False)
+
+                    # Print summary
+                    print(f"\n=== SUPERVISED LOADING SUMMARY ===")
+                    print(f"✓ Successfully loaded: {len(loaded_params)} parameters")
+                    print(
+                        f"✗ Skipped (shape mismatch): {len(skipped_params)} parameters"
+                    )
+                    print(f"✗ Missing in policy: {len(missing_params)} parameters")
+                    print(
+                        f"✗ Policy params not loaded: {len(unloaded_policy_params)} parameters"
+                    )
+
+                    if unloaded_policy_params:
+                        print(
+                            f"\nPolicy parameters that were NOT loaded from supervised checkpoint:"
+                        )
+                        for name, shape in unloaded_policy_params:
+                            print(f"  {name}: {shape}")
+
+                    # Validate that critical components were loaded
+                    critical_loaded = len(loaded_params) > 0
+                    if not critical_loaded:
+                        raise ValueError(
+                            f"CRITICAL ERROR: No parameters were loaded from supervised checkpoint! "
+                            f"This suggests the supervised and policy networks have incompatible architectures. "
+                            f"Supervised params: {list(supervised_state_dict.keys())}, "
+                            f"Policy params: {list(policy_state_dict.keys())}"
+                        )
+
+                    # Warn if less than 50% of supervised parameters were loaded
+                    loading_ratio = len(loaded_params) / len(supervised_state_dict)
+                    if loading_ratio < 0.5:
+                        warning_msg = f"\n⚠️  WARNING: Only {loading_ratio:.1%} of supervised parameters were loaded!"
+                        detail_msg = f"This may indicate architectural differences between the supervised and policy networks."
+                        print(warning_msg)
+                        print(detail_msg)
+
+                        if getattr(self.config, "strict_supervised_loading", False):
+                            raise ValueError(
+                                f"STRICT LOADING ERROR: {warning_msg.strip()} {detail_msg} "
+                                f"Use --strict-supervised-loading=false to allow partial loading."
+                            )
+
+                    print(
+                        f"\n✓ Successfully loaded {len(loaded_params)}/{len(supervised_state_dict)} parameters from {chk}"
+                    )
+
                 except Exception as e:
-                    print(f"Failed to load supervised weights: {e}")
+                    print(f"❌ FAILED to load supervised weights: {e}")
+                    raise  # Re-raise the exception to make failure obvious
             else:
-                print(f"Supervised checkpoint not found: {chk}")
+                raise FileNotFoundError(f"Supervised checkpoint not found: {chk}")
 
         return model
 
@@ -398,6 +481,11 @@ def create_config():
         "--supervised-path",
         type=str,
         help="Load initial weights from supervised training",
+    )
+    parser.add_argument(
+        "--strict-supervised-loading",
+        action="store_true",
+        help="Raise error if supervised loading fails or loads less than 50% of parameters",
     )
     parser.add_argument(
         "--checkpoint-freq", type=int, default=50000, help="Checkpoint frequency"
