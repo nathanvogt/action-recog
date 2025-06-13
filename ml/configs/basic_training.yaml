@@ -9,12 +9,13 @@ m: 4
 tol: 20
 
 # Training parameters
-total-timesteps: 10_000
-n-envs: 2
+# total-timesteps: 10_000
+total-timesteps: 16
+n-envs: 1 #2
 learning-rate: 0.0003
-n-steps: 256
+n-steps: 16 #256
 batch-size: 16
-n-epochs: 2
+n-epochs: 1 #2
 gamma: 0.99
 gae-lambda: 0.98
 clip-range: 0.5

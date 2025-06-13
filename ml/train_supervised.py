@@ -21,7 +21,7 @@ from sls_memoized import (
     RIGHT_ARM_NO_HAND,
     BACK,
 )
-from model import RepPolicy, PPOCompatiblePolicy
+from model import PPOCompatiblePolicy
 from collect_dataset import load_dataset
 
 
@@ -190,15 +190,11 @@ class PreSavedRepSequenceDataset(Dataset):
     def __init__(self, dataset_path: str) -> None:
         self.features, self.labels, self.metadata = load_dataset(dataset_path)
 
-        print(f"Loaded pre-saved dataset from {dataset_path}")
-        print(f"  Dataset info: {self.metadata['subject']}/{self.metadata['exercise']}")
-        print(f"  Total samples: {len(self.labels)}")
-        print(f"  Positive samples: {self.metadata['positive_samples']}")
-        print(f"  Negative samples: {self.metadata['negative_samples']}")
-        print(f"  Feature dimension: {self.metadata['feature_dim']}")
-        print("-" * 60)
+        print(
+            f"Loaded {len(self.labels)} samples from {dataset_path} ({self.metadata['positive_samples']} pos, {self.metadata['negative_samples']} neg)"
+        )
 
-    def __len__(self) -> int:  # type: ignore[override]
+    def __len__(self) -> int:
         return len(self.labels)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:  # type: ignore[override]
@@ -218,16 +214,12 @@ def load_config_from_yaml(yaml_path):
 def train_supervised(args: argparse.Namespace) -> None:
     # Determine whether to load pre-saved dataset or collect fresh data
     if hasattr(args, "load_dataset") and args.load_dataset:
-        print(f"Loading pre-saved dataset from {args.load_dataset}")
         dataset = PreSavedRepSequenceDataset(args.load_dataset)
         subject_exercise = (
             f"{dataset.metadata['subject']}/{dataset.metadata['exercise']}"
         )
         feature_dim = dataset.metadata["feature_dim"]
     else:
-        print(f"Collecting fresh data for {args.subject}/{args.exercise}")
-        print(f"Training for {args.epochs} epochs with batch size {args.batch_size}")
-
         dataset = RepSequenceDataset(
             args.subject,
             args.exercise,
@@ -240,9 +232,6 @@ def train_supervised(args: argparse.Namespace) -> None:
         subject_exercise = f"{args.subject}/{args.exercise}"
         feature_dim = dataset.features.shape[1]
 
-    print(f"Starting supervised training for {subject_exercise}")
-    print(f"Training for {args.epochs} epochs with batch size {args.batch_size}")
-
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 
     model = PPOCompatiblePolicy(
@@ -251,16 +240,12 @@ def train_supervised(args: argparse.Namespace) -> None:
         n_layers=args.n_layers,
         n_actions=2,
     )
-    # Use CrossEntropyLoss for classification with class indices
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
     print(
-        f"Model architecture: {sum(p.numel() for p in model.parameters())} parameters"
+        f"Training {subject_exercise} | {args.epochs} epochs | batch_size={args.batch_size} | {sum(p.numel() for p in model.parameters())} params"
     )
-    print(f"Dataset size: {len(dataset)} samples")
-    print(f"Batches per epoch: {len(loader)}")
-    print("-" * 60)
 
     best_loss = float("inf")
 
@@ -269,8 +254,6 @@ def train_supervised(args: argparse.Namespace) -> None:
         epoch_loss = 0.0
         correct_predictions = 0
         total_predictions = 0
-
-        print(f"Epoch {epoch + 1}/{args.epochs}")
 
         for batch_idx, (X, y) in enumerate(loader):
             optimizer.zero_grad()
@@ -288,37 +271,21 @@ def train_supervised(args: argparse.Namespace) -> None:
             correct_predictions += (pred_class == y).sum().item()
             total_predictions += y.size(0)
 
-            # Print progress every 10 batches or at the end
-            if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == len(loader):
-                current_loss = epoch_loss / ((batch_idx + 1) * args.batch_size)
-                current_acc = correct_predictions / total_predictions
-                print(
-                    f"  Batch {batch_idx + 1}/{len(loader)} - "
-                    f"Loss: {current_loss:.4f}, "
-                    f"Acc: {current_acc:.4f}, "
-                    f"Batch Loss: {batch_loss:.4f}"
-                )
-
         # Calculate final epoch metrics
         epoch_loss /= len(dataset)
         epoch_acc = correct_predictions / total_predictions
 
-        # Print epoch summary
-        print(f"\nEpoch {epoch + 1} Summary:")
-        print(f"  Final Loss: {epoch_loss:.4f}")
-        print(
-            f"  Final Accuracy: {epoch_acc:.4f} ({correct_predictions}/{total_predictions})"
-        )
-
-        # Track best model
+        # Print concise epoch summary
+        best_marker = ""
         if epoch_loss < best_loss:
             best_loss = epoch_loss
-            print(f"  ✓ New best loss: {best_loss:.4f}")
+            best_marker = " ✓"
 
-        print("-" * 60)
+        print(
+            f"Epoch {epoch + 1:2d}/{args.epochs}: Loss={epoch_loss:.4f}, Acc={epoch_acc:.4f}{best_marker}"
+        )
 
-    print(f"\nTraining completed!")
-    print(f"Best loss achieved: {best_loss:.4f}")
+    print(f"Training completed! Best loss: {best_loss:.4f}")
 
     if args.save_path:
         os.makedirs(args.save_path, exist_ok=True)
@@ -356,6 +323,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--save-path", default="./models/supervised", type=str)
     parser.add_argument(
         "--n-samples", type=int, default=1000, help="Number of sequences to sample"
+    )
+    parser.add_argument(
+        "--log-frequency",
+        type=int,
+        default=4,
+        help="Number of times to log progress per epoch (default: 4)",
     )
 
     args = parser.parse_args()
