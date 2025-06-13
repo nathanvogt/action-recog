@@ -2,6 +2,7 @@ import argparse
 from typing import Sequence, List, Tuple
 import os
 import yaml
+import pickle
 
 import numpy as np
 import torch
@@ -21,6 +22,7 @@ from sls_memoized import (
     BACK,
 )
 from model import RepPolicy, PPOCompatiblePolicy
+from collect_dataset import load_dataset
 
 
 class RepSequenceDataset(Dataset):
@@ -135,17 +137,66 @@ class RepSequenceDataset(Dataset):
     def _sample_sequences(self) -> tuple[np.ndarray, np.ndarray]:
         feats: List[np.ndarray] = []
         labs: List[int] = []
-        for _ in range(self.n_samples):
+
+        print(
+            f"Sampling {self.n_samples} sequences for {self.subject}/{self.exercise}..."
+        )
+        positive_count = 0
+        negative_count = 0
+
+        # Use tqdm for progress tracking
+        for i in tqdm(range(self.n_samples), desc="Processing sequences", unit="seq"):
             if np.random.rand() < 0.5:
                 idx1, idx2 = self._sample_positive_indices()
                 label = 1
+                positive_count += 1
             else:
                 idx1, idx2 = self._sample_negative_indices()
                 label = 0
+                negative_count += 1
             start, end = sorted((idx1, idx2))
             feats.append(self._process_sequence(start, end))
             labs.append(label)
+
+            # Show intermediate progress every 100 samples
+            if (i + 1) % 100 == 0:
+                tqdm.write(
+                    f"  Progress: {i+1}/{self.n_samples} - "
+                    f"Positive: {positive_count}, Negative: {negative_count}"
+                )
+
+        print(f"Data collection complete!")
+        print(f"  Total samples: {self.n_samples}")
+        print(f"  Positive samples: {positive_count}")
+        print(f"  Negative samples: {negative_count}")
+        print(f"  Feature dimension: {len(feats[0]) if feats else 0}")
+        print("-" * 60)
+
         return np.stack(feats), np.array(labs, dtype=np.float32)
+
+    def __len__(self) -> int:  # type: ignore[override]
+        return len(self.labels)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:  # type: ignore[override]
+        x = torch.from_numpy(self.features[idx])
+        # Return class index for CrossEntropyLoss
+        y = torch.tensor(int(self.labels[idx]), dtype=torch.long)
+        return x, y
+
+
+class PreSavedRepSequenceDataset(Dataset):
+    """Dataset that loads pre-saved features and labels."""
+
+    def __init__(self, dataset_path: str) -> None:
+        self.features, self.labels, self.metadata = load_dataset(dataset_path)
+
+        print(f"Loaded pre-saved dataset from {dataset_path}")
+        print(f"  Dataset info: {self.metadata['subject']}/{self.metadata['exercise']}")
+        print(f"  Total samples: {len(self.labels)}")
+        print(f"  Positive samples: {self.metadata['positive_samples']}")
+        print(f"  Negative samples: {self.metadata['negative_samples']}")
+        print(f"  Feature dimension: {self.metadata['feature_dim']}")
+        print("-" * 60)
 
     def __len__(self) -> int:  # type: ignore[override]
         return len(self.labels)
@@ -165,23 +216,37 @@ def load_config_from_yaml(yaml_path):
 
 
 def train_supervised(args: argparse.Namespace) -> None:
-    print(f"Starting supervised training for {args.subject}/{args.exercise}")
-    print(f"Training for {args.epochs} epochs with batch size {args.batch_size}")
+    # Determine whether to load pre-saved dataset or collect fresh data
+    if hasattr(args, "load_dataset") and args.load_dataset:
+        print(f"Loading pre-saved dataset from {args.load_dataset}")
+        dataset = PreSavedRepSequenceDataset(args.load_dataset)
+        subject_exercise = (
+            f"{dataset.metadata['subject']}/{dataset.metadata['exercise']}"
+        )
+        feature_dim = dataset.metadata["feature_dim"]
+    else:
+        print(f"Collecting fresh data for {args.subject}/{args.exercise}")
+        print(f"Training for {args.epochs} epochs with batch size {args.batch_size}")
 
-    dataset = RepSequenceDataset(
-        args.subject,
-        args.exercise,
-        dataset_root=args.dataset_root,
-        c=args.c,
-        m=args.m,
-        tol=args.tol,
-        n_samples=args.n_samples,
-    )
+        dataset = RepSequenceDataset(
+            args.subject,
+            args.exercise,
+            dataset_root=args.dataset_root,
+            c=args.c,
+            m=args.m,
+            tol=args.tol,
+            n_samples=args.n_samples,
+        )
+        subject_exercise = f"{args.subject}/{args.exercise}"
+        feature_dim = dataset.features.shape[1]
+
+    print(f"Starting supervised training for {subject_exercise}")
+    print(f"Training for {args.epochs} epochs with batch size {args.batch_size}")
 
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 
     model = PPOCompatiblePolicy(
-        dataset.features.shape[1],
+        feature_dim,
         hidden=args.hidden_dim,
         n_layers=args.n_layers,
         n_actions=2,
@@ -269,6 +334,11 @@ def parse_args() -> argparse.Namespace:
     # Configuration file
     parser.add_argument("--config", type=str, help="Path to YAML configuration file")
 
+    # Option to load pre-saved dataset
+    parser.add_argument(
+        "--load-dataset", type=str, help="Path to pre-saved dataset directory"
+    )
+
     # Remove required=True from subject and exercise since they can come from YAML
     parser.add_argument("--subject", type=str, help="Subject ID")
     parser.add_argument("--exercise", type=str, help="Exercise name")
@@ -306,10 +376,15 @@ def parse_args() -> argparse.Namespace:
                     setattr(args, key_with_underscores, value)
 
     # Validate required arguments
-    if not args.subject:
-        raise ValueError("Subject is required (via --subject or config file)")
-    if not args.exercise:
-        raise ValueError("Exercise is required (via --exercise or config file)")
+    if args.load_dataset:
+        # When loading a pre-saved dataset, subject/exercise are not required
+        print(f"Will load pre-saved dataset from: {args.load_dataset}")
+    else:
+        # When collecting fresh data, subject/exercise are required
+        if not args.subject:
+            raise ValueError("Subject is required (via --subject or config file)")
+        if not args.exercise:
+            raise ValueError("Exercise is required (via --exercise or config file)")
 
     return args
 

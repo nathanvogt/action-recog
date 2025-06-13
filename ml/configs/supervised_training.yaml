@@ -1,13 +1,15 @@
 subject: "S03"
 exercise: "dumbbell_biceps_curls"
 dataset-root: "train"
+load-dataset: "./datasets/S03_dumbbell_biceps_curls"
+
 c: 24
 m: 4
 tol: 20
 
-n-samples: 4
-epochs: 1
-batch-size: 2
+n-samples: 100
+epochs: 10
+batch-size: 16
 learning-rate: 0.001
 
 hidden-dim: 32
