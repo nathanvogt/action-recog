@@ -1,7 +1,7 @@
 subject: "S03"
 exercise: "dumbbell_biceps_curls"
 dataset-root: "train"
-load-dataset: "./datasets/S03_dumbbell_biceps_curls"
+load-dataset: "./datasets/S03_dumbbell_biceps_curls_backup"
 
 c: 24
 m: 4

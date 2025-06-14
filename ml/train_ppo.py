@@ -72,7 +72,7 @@ class PPOTrainer:
             policy_kwargs=dict(
                 net_arch=[self.config.hidden_dim] * self.config.n_layers,
                 activation_fn=torch.nn.ReLU,
-                # share_features_extractor=False,
+                share_features_extractor=False,
             ),
             tensorboard_log=f"./tensorboard_logs/" if self.config.tensorboard else None,
             verbose=1,
