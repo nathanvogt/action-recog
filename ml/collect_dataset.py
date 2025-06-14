@@ -158,22 +158,114 @@ class RepSequenceCollector:
                 return idx
 
     def _sample_negative_indices(self) -> Tuple[int, int]:
-        if not self.rep_idx:
+        """Sample indices for negative examples - always incomplete reps.
+
+        Negative samples should never contain a complete rep within the sequence.
+        They should either be:
+        1. Partial reps (within a single rep but not spanning the full rep)
+        2. Rest periods (entirely between reps)
+        """
+        if not self.rep_idx or len(self.rep_idx) < 2:
+            # If no rep boundaries, sample any two indices
             idx1 = np.random.randint(0, len(self.poses))
             idx2 = np.random.randint(0, len(self.poses))
             return (idx1, idx2)
 
+        # Strategy: 50% partial reps, 50% rest periods
         if np.random.rand() < 0.5:
+            # Sample a partial rep (within a single rep but not the full rep)
+            return self._sample_partial_rep()
+        else:
+            # Sample from rest periods (between reps)
+            return self._sample_rest_period()
+
+    def _sample_partial_rep(self) -> Tuple[int, int]:
+        """Sample a partial rep - within a single rep but not spanning the full rep."""
+        if len(self.rep_idx) < 2:
+            return self._sample_rest_period()
+
+        # Choose a random rep (between consecutive boundaries)
+        rep_start_idx = np.random.randint(0, len(self.rep_idx) - 1)
+        rep_start = self.rep_idx[rep_start_idx]
+        rep_end = self.rep_idx[rep_start_idx + 1]
+
+        # Ensure the rep is long enough to sample a partial sequence
+        rep_length = rep_end - rep_start
+        if rep_length <= 2:
+            # Rep too short, fall back to rest period
+            return self._sample_rest_period()
+
+        # Sample two points within this rep, but ensure it's not the full rep
+        # Add some margin to avoid accidentally getting the full rep
+        margin = max(1, rep_length // 10)  # 10% margin
+
+        # Sample start point with margin from rep boundary
+        start_range_begin = rep_start + margin
+        start_range_end = rep_end - margin - 1
+
+        if start_range_begin >= start_range_end:
+            # Not enough room for margin, fall back to rest period
+            return self._sample_rest_period()
+
+        idx1 = np.random.randint(start_range_begin, start_range_end + 1)
+
+        # Sample end point ensuring we don't get the full rep
+        # Limit the sequence length to be less than the full rep
+        max_sequence_length = rep_length - 2 * margin
+        if max_sequence_length <= 1:
+            return self._sample_rest_period()
+
+        sequence_length = np.random.randint(
+            1, min(max_sequence_length, rep_length // 2) + 1
+        )
+
+        # Randomly choose direction (forward or backward)
+        if np.random.rand() < 0.5:
+            idx2 = min(idx1 + sequence_length, rep_end - margin - 1)
+        else:
+            idx2 = max(idx1 - sequence_length, rep_start + margin)
+
+        return (idx1, idx2)
+
+    def _sample_rest_period(self) -> Tuple[int, int]:
+        """Sample from rest periods (between reps or outside rep boundaries)."""
+        if not self.rep_idx:
+            # No rep boundaries, sample anywhere
+            idx1 = np.random.randint(0, len(self.poses))
+            idx2 = np.random.randint(0, len(self.poses))
+            return (idx1, idx2)
+
+        # Find rest periods (gaps between reps and before/after all reps)
+        rest_periods = []
+
+        # Before first rep
+        if self.rep_idx[0] > self.tol:
+            rest_periods.append((0, self.rep_idx[0] - self.tol))
+
+        # Between reps
+        for i in range(len(self.rep_idx) - 1):
+            gap_start = self.rep_idx[i] + self.tol
+            gap_end = self.rep_idx[i + 1] - self.tol
+            if gap_end > gap_start:
+                rest_periods.append((gap_start, gap_end))
+
+        # After last rep
+        if self.rep_idx[-1] + self.tol < len(self.poses):
+            rest_periods.append((self.rep_idx[-1] + self.tol, len(self.poses) - 1))
+
+        if not rest_periods:
+            # No suitable rest periods, sample two non-boundary indices
             idx1 = self._sample_non_boundary_index()
             idx2 = self._sample_non_boundary_index()
-        else:
-            idx1 = self._sample_non_boundary_index()
-            boundary = np.random.choice(self.rep_idx)
-            idx2 = np.clip(
-                np.random.randint(boundary - self.tol, boundary + self.tol + 1),
-                0,
-                len(self.poses) - 1,
-            )
+            return (idx1, idx2)
+
+        # Choose a random rest period
+        period_start, period_end = rest_periods[np.random.randint(len(rest_periods))]
+
+        # Sample two indices within this rest period
+        idx1 = np.random.randint(period_start, period_end + 1)
+        idx2 = np.random.randint(period_start, period_end + 1)
+
         return (idx1, idx2)
 
     def _process_sequence(self, start: int, end: int) -> np.ndarray:

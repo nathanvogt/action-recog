@@ -9,17 +9,16 @@ m: 4
 tol: 20
 
 # Training parameters
-# total-timesteps: 10_000
-total-timesteps: 16
-n-envs: 1 #2
+total-timesteps: 100_000
+n-envs: 2
 learning-rate: 0.0003
-n-steps: 16 #256
-batch-size: 16
-n-epochs: 1 #2
+n-steps: 256
+batch-size: 4
+n-epochs: 4
 gamma: 0.99
 gae-lambda: 0.98
 clip-range: 0.5
-ent-coef: 0.01
+ent-coef: 0.001
 vf-coef: 0.75
 max-grad-norm: 0.5
 
@@ -29,18 +28,18 @@ n-layers: 2
 
 # Evaluation parameters
 eval-freq: 10_000
-n-eval-episodes: 4 # used in training mode
-n-eval-eps: 2 # used in evaluation mode
+n-eval-episodes: 1 # used in training mode
+n-eval-eps: 1 # used in evaluation mode
 eval-subject: "s03"
 eval-exercise: "dumbbell_biceps_curls"
-eval-deterministic: false
+eval-deterministic: true
 
 # Saving and logging
 supervised-path: "./models/supervised/rep_classifier.pt"
 strict-supervised-loading: true # Fail if supervised loading doesn't work well
 # load-path: "./models/basic_training/final_model.zip"
-save-path: "./models/basic_training/fine_tuned"
-# checkpoint-freq: 100_000
+save-path: "./models/basic_training"
+checkpoint-freq: 10_000
 log-interval: 10
 use-wandb: false
 tensorboard: false
